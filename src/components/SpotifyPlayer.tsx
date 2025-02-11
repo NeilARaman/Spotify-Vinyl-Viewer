@@ -5,19 +5,31 @@ export function SpotifyPlayer() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Handle the callback from Spotify auth
     if (window.location.hash) {
-      const success = spotifyService.handleCallback();
-      if (success) {
-        setIsLoggedIn(true);
-        initializePlayer();
+      console.log('Found hash in URL, attempting callback handling');
+      try {
+        const success = spotifyService.handleCallback();
+        console.log('Callback handling result:', success);
+        if (success) {
+          setIsLoggedIn(true);
+          initializePlayer();
+        } else {
+          setError('Failed to get access token from Spotify');
+        }
+      } catch (err) {
+        console.error('Error handling Spotify callback:', err);
+        setError('Error handling Spotify authentication');
       }
     }
 
     // Check if already logged in
-    setIsLoggedIn(spotifyService.isLoggedIn());
+    const isAlreadyLoggedIn = spotifyService.isLoggedIn();
+    console.log('Already logged in:', isAlreadyLoggedIn);
+    setIsLoggedIn(isAlreadyLoggedIn);
   }, []);
 
   useEffect(() => {
@@ -52,14 +64,15 @@ export function SpotifyPlayer() {
     spotifyService.playPlaylist(playlistId);
   };
 
-  if (!isLoggedIn) {
+  if (error) {
     return (
       <div className="flex flex-col items-center justify-center p-8">
+        <p className="text-red-500 mb-4">{error}</p>
         <button
           onClick={handleLogin}
           className="px-6 py-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
         >
-          Connect with Spotify
+          Try Again
         </button>
       </div>
     );

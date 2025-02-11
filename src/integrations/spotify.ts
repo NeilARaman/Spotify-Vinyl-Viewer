@@ -1,5 +1,6 @@
 const SPOTIFY_CLIENT_ID = 'd0469a1618e4427b87de47779818f74c';
-const REDIRECT_URI = `${window.location.origin}/callback`;
+const REDIRECT_URI = 'https://spotify-vinyl-project.vercel.app/callback';
+
 const SCOPES = [
   'user-read-private',
   'user-read-email',
@@ -9,6 +10,8 @@ const SCOPES = [
   'user-read-playback-state',
   'user-modify-playback-state'
 ];
+
+console.log('Spotify Auth URL:', `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES.join(' '))}`);
 
 export class SpotifyService {
   private static instance: SpotifyService;
@@ -28,13 +31,16 @@ export class SpotifyService {
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
+    console.log('Attempting login with URL:', authUrl);
     window.location.href = authUrl;
   }
 
   handleCallback() {
+    console.log('Handling callback with hash:', window.location.hash);
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     this.accessToken = params.get('access_token');
+    console.log('Got access token:', this.accessToken ? 'yes' : 'no');
     if (this.accessToken) {
       localStorage.setItem('spotify_access_token', this.accessToken);
       return true;
