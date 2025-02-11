@@ -78,6 +78,19 @@ export function SpotifyPlayer() {
     );
   }
 
+  if (!isLoggedIn) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <button
+          onClick={handleLogin}
+          className="px-6 py-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+        >
+          Connect with Spotify
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <h2 className="text-2xl font-bold mb-6">Your Spotify Playlists</h2>
