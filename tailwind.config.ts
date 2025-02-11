@@ -20,15 +20,10 @@ export default {
     },
     extend: {
       colors: {
-        wood: {
-          DEFAULT: "#8B4513",
-          light: "#A0522D",
-          dark: "#654321",
-        },
-        brass: {
-          DEFAULT: "#D4AF37",
-          light: "#FFD700",
-          dark: "#B8860B",
+        player: {
+          bg: "#FFFFFF",
+          dark: "#000000",
+          accent: "#0EA5E9",
         },
         vinyl: {
           DEFAULT: "#1A1A1A",
@@ -50,7 +45,7 @@ export default {
         },
         armMove: {
           "0%": { transform: "rotate(0deg)" },
-          "100%": { transform: "rotate(15deg)" },
+          "100%": { transform: "rotate(25deg)" },
         },
       },
       animation: {
