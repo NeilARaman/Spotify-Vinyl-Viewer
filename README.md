@@ -1,4 +1,3 @@
-```markdown
 # Spotify Vinyl Project
 
 ## Overview
@@ -93,4 +92,3 @@ This project is licensed under the MIT License.
 ## Contact
 
 For any queries or suggestions, please reach out to [NeilARaman](https://github.com/NeilARaman).
-```
