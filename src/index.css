@@ -5,7 +5,7 @@
 
 @layer base {
   body {
-    @apply bg-wood-dark text-brass-light antialiased;
+    @apply bg-player-dark text-white antialiased;
   }
 
   /* Custom Scrollbar */
@@ -14,11 +14,11 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-wood-dark;
+    @apply bg-player-dark;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-brass/30 rounded-full hover:bg-brass/50 transition-colors;
+    @apply bg-player-accent/30 rounded-full hover:bg-player-accent/50 transition-colors;
   }
 }
 
