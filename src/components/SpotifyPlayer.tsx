@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { spotifyService } from '../integrations/spotify';
 
 export function SpotifyPlayer() {
+  const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
@@ -17,6 +19,8 @@ export function SpotifyPlayer() {
         if (success) {
           setIsLoggedIn(true);
           initializePlayer();
+          // Navigate back to home page after successful login
+          navigate('/', { replace: true });
         } else {
           setError('Failed to get access token from Spotify');
         }
@@ -30,7 +34,7 @@ export function SpotifyPlayer() {
     const isAlreadyLoggedIn = spotifyService.isLoggedIn();
     console.log('Already logged in:', isAlreadyLoggedIn);
     setIsLoggedIn(isAlreadyLoggedIn);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (isLoggedIn) {
