@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project integrates Spotify with a vinyl record collection, allowing users to create a seamless experience between digital and physical music formats.
+I really like Spotify but wanted something more similar to that of a 90s-ish vinyl record and wanted it fast, so I made this using Vercel, Loveable, Cursor, and Supabase in 2ish hours.
 
 ## Project URL
 
