@@ -1,5 +1,5 @@
 const SPOTIFY_CLIENT_ID = 'd0469a1618e4427b87de47779818f74c';
-const REDIRECT_URI = `${window.location.origin}/callback`;
+const REDIRECT_URI = 'http://localhost:5173/callback';
 const SCOPES = [
   'user-read-private',
   'user-read-email',
