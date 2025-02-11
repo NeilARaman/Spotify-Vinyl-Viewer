@@ -11,7 +11,7 @@ const RecordPlayer = () => {
 
   return (
     <div className="relative w-full max-w-2xl mx-auto p-8 bg-wood rounded-lg shadow-2xl transform transition-all duration-500 hover:scale-[1.02]">
-      <div className="absolute top-4 right-4 flex gap-2">
+      <div className="absolute top-2 right-2">
         <span className="px-3 py-1 bg-brass/20 text-brass-dark rounded-full text-xs font-inter">
           Vintage Series
         </span>
@@ -22,7 +22,7 @@ const RecordPlayer = () => {
         {/* Platter */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-vinyl shadow-lg">
           {/* Record */}
-          <div className={`w-full h-full rounded-full border-4 border-vinyl-groove ${isPlaying ? 'animate-spin-slow' : ''} transition-all duration-1000`}>
+          <div className={`w-full h-full rounded-full record-groove ${isPlaying ? 'animate-spin-slow' : ''} transition-all duration-1000`}>
             {/* Label */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-brass-light flex items-center justify-center">
               <span className="text-vinyl text-xs font-playfair font-semibold">33⅓ RPM</span>
@@ -31,7 +31,7 @@ const RecordPlayer = () => {
         </div>
 
         {/* Tonearm */}
-        <div className={`absolute top-12 right-12 w-40 h-4 bg-brass-dark rounded-full origin-right transform transition-all duration-1000 ${isPlaying ? 'rotate-12' : 'rotate-0'}`}>
+        <div className={`absolute top-16 right-16 w-48 h-4 bg-brass-dark rounded-full origin-right transform transition-all duration-1000 ${isPlaying ? 'rotate-15' : 'rotate-2'}`}>
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-brass"></div>
         </div>
       </div>
