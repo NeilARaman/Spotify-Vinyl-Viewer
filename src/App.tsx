@@ -2,15 +2,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { SpotifyPlayer } from "./components/SpotifyPlayer";
 
 const queryClient = new QueryClient();
 
-// Callback component to handle Spotify auth
+// Dedicated callback component that ensures the SpotifyPlayer is mounted
 const SpotifyCallback = () => {
+  console.log('Rendering SpotifyCallback component');
+  if (!window.location.hash) {
+    console.log('No hash found, redirecting to home');
+    return <Navigate to="/" replace />;
+  }
   return <SpotifyPlayer />;
 };
 
