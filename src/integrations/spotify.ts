@@ -19,6 +19,7 @@ export class SpotifyService {
   private accessToken: string | null = null;
   private player: Spotify.Player | null = null;
   private deviceId: string | null = null;
+  private stateCallback: ((state: Spotify.PlaybackState | null) => void) | null = null;
 
   private constructor() {
     // Try to restore the access token from localStorage
@@ -56,13 +57,15 @@ export class SpotifyService {
     return false;
   }
 
-  async initializePlayer(): Promise<boolean> {
+  async initializePlayer(onStateChange?: (state: Spotify.PlaybackState | null) => void): Promise<boolean> {
     return new Promise((resolve) => {
       if (!window.Spotify) {
         console.error('Spotify SDK not loaded');
         resolve(false);
         return;
       }
+
+      this.stateCallback = onStateChange || null;
 
       this.player = new window.Spotify.Player({
         name: 'Vinyl Smooth Player',
@@ -91,6 +94,9 @@ export class SpotifyService {
       // Playback status updates
       this.player.addListener('player_state_changed', (state) => {
         console.log('Player State Changed:', state);
+        if (this.stateCallback) {
+          this.stateCallback(state);
+        }
       });
 
       // Ready
@@ -153,6 +159,26 @@ export class SpotifyService {
 
   isLoggedIn(): boolean {
     return !!this.accessToken;
+  }
+
+  async togglePlayback(): Promise<void> {
+    if (!this.player) return;
+    const state = await this.player.getCurrentState();
+    if (state?.paused) {
+      await this.player.resume();
+    } else {
+      await this.player.pause();
+    }
+  }
+
+  async nextTrack(): Promise<void> {
+    if (!this.player) return;
+    await this.player.nextTrack();
+  }
+
+  async previousTrack(): Promise<void> {
+    if (!this.player) return;
+    await this.player.previousTrack();
   }
 }
 

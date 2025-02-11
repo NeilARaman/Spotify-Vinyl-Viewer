@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { spotifyService } from '../integrations/spotify';
 
-export function SpotifyPlayer() {
+interface SpotifyPlayerProps {
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onTrackChange?: (trackName: string, artistName: string) => void;
+}
+
+export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyPlayerProps) {
   const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPlaylist, setCurrentPlaylist] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     // Handle the callback from Spotify auth
@@ -58,7 +64,18 @@ export function SpotifyPlayer() {
       // Add event listener for when the SDK is ready
       window.onSpotifyWebPlaybackSDKReady = async () => {
         console.log('Spotify Web Playback SDK Ready');
-        const success = await spotifyService.initializePlayer();
+        const success = await spotifyService.initializePlayer((state) => {
+          // Update playing state
+          setIsPlaying(!state?.paused);
+          onPlaybackStateChange?.(!state?.paused);
+
+          // Update track info
+          if (state?.track_window?.current_track) {
+            const { name, artists } = state.track_window.current_track;
+            onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
+          }
+        });
+        
         console.log('Player initialization result:', success);
         if (success) {
           setIsPlayerReady(true);
