@@ -85,10 +85,6 @@ Open [Lovable](https://lovable.dev/projects/f011cc45-f52a-4cc3-b9bf-67000721b1b8
 
 Contributions are welcome! Please fork this repository and open a pull request to add improvements.
 
-## License
-
-This project is licensed under the MIT License.
-
 ## Contact
 
 For any queries or suggestions, please reach out to [NeilARaman](https://github.com/NeilARaman).
