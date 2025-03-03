@@ -579,12 +579,13 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-brass text-dark-brown hover:bg-brass/80 transition-colors duration-300 font-medium shadow-md"
+            className="px-4 py-2 bg-brass text-dark-brown rounded-lg hover:brightness-110 transition-all border-2 border-amber-700/30 text-sm flex items-center gap-2 font-bold shadow-md"
             aria-label="Logout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V9.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5V16a3 3 0 01-3 3H3a3 3 0 01-3-3V4a3 3 0 013-3h9.5a.5.5 0 01.5.5v1a.5.5 0 01-.5.5H3z" clipRule="evenodd" />
-              <path fillRule="evenodd" d="M11.293 1.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L14.586 8H7a1 1 0 010-2h7.586l-3.293-3.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
             Logout
           </button>
