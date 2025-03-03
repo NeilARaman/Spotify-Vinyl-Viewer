@@ -75,6 +75,52 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       setStatus('connecting');
       console.log('Initializing Spotify player...');
       
+      // First, load the Spotify Web Playback SDK if it hasn't been loaded yet
+      if (!window.Spotify || !document.getElementById('spotify-player')) {
+        console.log('Loading Spotify SDK script...');
+        
+        // Create a promise to track when the SDK is ready
+        const sdkReadyPromise = new Promise<void>((resolve, reject) => {
+          // Create script element
+          const script = document.createElement('script');
+          script.id = 'spotify-player';
+          script.src = 'https://sdk.scdn.co/spotify-player.js';
+          script.async = true;
+          
+          // Set timeout for SDK loading
+          const timeout = setTimeout(() => {
+            reject(new Error('Spotify SDK loading timed out after 20 seconds'));
+          }, 20000); // 20 second timeout
+          
+          // Set up global callback that Spotify calls when SDK is ready
+          window.onSpotifyWebPlaybackSDKReady = () => {
+            console.log('Spotify SDK is ready');
+            clearTimeout(timeout);
+            resolve();
+          };
+          
+          // Handle script load errors
+          script.onerror = (error) => {
+            console.error('Failed to load Spotify SDK:', error);
+            clearTimeout(timeout);
+            reject(new Error('Failed to load Spotify SDK. Please check your internet connection and try again.'));
+          };
+          
+          document.body.appendChild(script);
+        });
+        
+        try {
+          // Wait for SDK to be ready
+          await sdkReadyPromise;
+          console.log('Spotify SDK loaded successfully');
+        } catch (error) {
+          console.error('Error loading Spotify SDK:', error);
+          setError(error instanceof Error ? error.message : 'Failed to load Spotify SDK');
+          setStatus('error');
+          return false;
+        }
+      }
+      
       // Add a listener for uncaught promise rejections to catch 404 errors
       const rejectionHandler = (event: PromiseRejectionEvent) => {
         console.error('Uncaught promise rejection in Spotify Player:', event.reason);
@@ -242,6 +288,20 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       };
     }
     
+    // SDK loading errors
+    if (error.includes('SDK') || error.includes('script')) {
+      return {
+        message: "Spotify SDK Loading Failed",
+        cause: error,
+        solutions: [
+          "Check your internet connection",
+          "Make sure you don't have any content blockers active",
+          "Try using a different browser",
+          "Clear your browser cache and refresh the page"
+        ]
+      };
+    }
+    
     // Error contains 404
     if (error.includes('404') || error.toLowerCase().includes('not found')) {
       return {
@@ -252,6 +312,20 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           "Wait a few minutes and try again",
           "Try using Spotify in another app to confirm it's working",
           "Try logging out and back in"
+        ]
+      };
+    }
+    
+    // Error contains timeout
+    if (error.toLowerCase().includes('timeout') || error.toLowerCase().includes('timed out')) {
+      return {
+        message: "Connection Timeout",
+        cause: "The connection to Spotify took too long to establish",
+        solutions: [
+          "Check your internet connection speed",
+          "Try again when you have a stronger connection",
+          "Disable any VPN or proxy services",
+          "Try using a different network"
         ]
       };
     }
