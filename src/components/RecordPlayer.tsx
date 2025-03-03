@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import { spotifyService } from "../integrations/spotify";
 
