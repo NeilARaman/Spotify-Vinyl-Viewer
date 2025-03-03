@@ -105,7 +105,41 @@ export class SpotifyService {
   static getInstance(): SpotifyService {
     if (!SpotifyService.instance) {
       SpotifyService.instance = new SpotifyService();
+      
+      // Add fetch override to intercept and handle problematic requests gracefully
+      const originalFetch = window.fetch;
+      window.fetch = async function(input, init) {
+        const url = input instanceof Request ? input.url : input.toString();
+        
+        // If this is a request to cpapi.spotify.com, which often 404s but doesn't affect core functionality
+        if (url.includes('cpapi.spotify.com') && url.includes('event')) {
+          try {
+            const response = await originalFetch(input, init);
+            // Just log these errors without throwing
+            if (!response.ok && (response.status === 404 || response.status === 400)) {
+              console.debug(`Handled non-critical Spotify event API error: ${response.status} for ${url}`);
+              // Return a synthetic "OK" response to prevent errors bubbling up
+              return new Response(JSON.stringify({ handled: true }), { 
+                status: 200, 
+                headers: new Headers({ 'Content-Type': 'application/json' }) 
+              });
+            }
+            return response;
+          } catch (error) {
+            // For network errors on these endpoints, return a synthetic response
+            console.debug(`Suppressed network error to Spotify event API: ${url}`, error);
+            return new Response(JSON.stringify({ handled: true }), { 
+              status: 200, 
+              headers: new Headers({ 'Content-Type': 'application/json' }) 
+            });
+          }
+        }
+        
+        // All other requests proceed normally
+        return originalFetch(input, init);
+      };
     }
+    
     return SpotifyService.instance;
   }
 

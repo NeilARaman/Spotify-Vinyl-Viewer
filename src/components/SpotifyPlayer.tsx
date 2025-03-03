@@ -28,7 +28,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<{ name: string, artist: string } | null>(null);
-  
+
   // Check for authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -61,8 +61,37 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     };
     
     checkAuth();
+
+    // Add global error handler to suppress known Spotify SDK messaging error
+    const handleGlobalErrors = (event: ErrorEvent) => {
+      if (event.error && event.error.message && event.error.message.includes('message channel closed before a response was received')) {
+        // This is a known Spotify SDK error that can be safely ignored
+        console.debug('Suppressed Spotify SDK messaging error:', event.error.message);
+        event.preventDefault();
+      }
+    };
+
+    // Add global unhandled rejection handler to suppress the same error in promises
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason && typeof event.reason.message === 'string' && 
+          event.reason.message.includes('message channel closed before a response was received')) {
+        // This is a known Spotify SDK error that can be safely ignored
+        console.debug('Suppressed Spotify SDK promise rejection:', event.reason.message);
+        event.preventDefault();
+      }
+    };
+
+    // Register error handlers
+    window.addEventListener('error', handleGlobalErrors);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    // Clean up
+    return () => {
+      window.removeEventListener('error', handleGlobalErrors);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, [navigate]);
-  
+
   // Initialize the player
   const initializePlayer = async () => {
     try {
@@ -74,7 +103,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       }
       
       setStatus('connecting');
-      console.log('Initializing Spotify player...');
+    console.log('Initializing Spotify player...');
       
       // First, load the Spotify Web Playback SDK if it hasn't been loaded yet
       if (!window.Spotify || !document.getElementById('spotify-player')) {
@@ -83,11 +112,11 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
         // Create a promise to track when the SDK is ready
         const sdkReadyPromise = new Promise<void>((resolve, reject) => {
           // Create script element
-          const script = document.createElement('script');
-          script.id = 'spotify-player';
-          script.src = 'https://sdk.scdn.co/spotify-player.js';
-          script.async = true;
-          
+      const script = document.createElement('script');
+      script.id = 'spotify-player';
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      script.async = true;
+
           // Set timeout for SDK loading
           const timeout = setTimeout(() => {
             reject(new Error('Spotify SDK loading timed out after 20 seconds'));
@@ -143,7 +172,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           const isCurrentlyPlaying = !state?.paused;
           setIsPlaying(isCurrentlyPlaying);
           onPlaybackStateChange?.(isCurrentlyPlaying);
-          
+
           // Update track info if available
           if (state?.track_window?.current_track) {
             const { name, artists } = state.track_window.current_track;
@@ -201,8 +230,8 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     if (playlistsLoaded) return; // Don't reload if already loaded
     
     try {
-      const userPlaylists = await spotifyService.getUserPlaylists();
-      setPlaylists(userPlaylists);
+    const userPlaylists = await spotifyService.getUserPlaylists();
+    setPlaylists(userPlaylists);
       setNoPlaylists(userPlaylists.length === 0);
       setPlaylistsLoaded(true);
     } catch (err) {
@@ -214,13 +243,13 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Handle login action
   const handleLogin = () => {
     try {
-      spotifyService.login();
+    spotifyService.login();
     } catch (err) {
       console.error('Login error:', err);
       setError('Could not connect to Spotify. Please try again.');
     }
   };
-  
+
   // Play a playlist
   const playPlaylist = async (playlistId: string) => {
     if (status !== 'ready') {
@@ -434,7 +463,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               )}
             </button>
             
-            <button
+        <button
               onClick={() => {
                 spotifyService.logout();
                 window.location.reload();
@@ -442,13 +471,13 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               className="px-6 py-3 bg-transparent border border-brass text-brass rounded-lg hover:bg-brass/10 transition-colors"
             >
               Logout & Reconnect
-            </button>
+        </button>
           </div>
         </div>
       </div>
     );
   }
-  
+
   // Not logged in
   if (status === 'ready' && !spotifyService.isLoggedIn()) {
     return (
@@ -474,7 +503,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       </div>
     );
   }
-  
+
   // Ready with playlists
   return (
     <div className="p-8">
