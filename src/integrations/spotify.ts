@@ -176,8 +176,7 @@ export class SpotifyService {
     this.connectionAttempts++;
     
     // Log information for debugging
-    console.log('Starting Spotify player initialization');
-    console.log('Connection attempt:', this.connectionAttempts);
+    console.log('Starting Spotify player initialization (attempt ' + this.connectionAttempts + ')');
     
     // Create a new initialization promise
     this.initializationPromise = new Promise<boolean>((resolve) => {
@@ -190,11 +189,10 @@ export class SpotifyService {
 
       this.stateCallback = onStateChange || null;
 
-      // Create player with more robust error handling
+      // Create player with more robust error handling and specify robustness level
       this.player = new window.Spotify.Player({
         name: 'Vinyl Smooth Player',
         getOAuthToken: (cb) => {
-          // Check token expiration
           if (this.isTokenExpired()) {
             this.clearTokens();
             resolve(false);
@@ -203,7 +201,13 @@ export class SpotifyService {
           console.log('Providing access token to Spotify SDK');
           cb(this.accessToken || '');
         },
-        volume: 0.5
+        volume: 0.5,
+        // Add robustness level to prevent warnings
+        enableMediaSession: true,
+        audioQuality: {
+          robustness: 'SW_SECURE_CRYPTO',
+          preferredAudioCodecs: ['AAC'] 
+        }
       });
 
       // Set a timeout to prevent hanging initialization
@@ -217,6 +221,10 @@ export class SpotifyService {
       this.player.addListener('initialization_error', ({ message }) => {
         console.error('Spotify initialization error:', message);
         clearTimeout(timeoutId);
+        // Check for specific errors
+        if (message.includes('404') || message.includes('Not Found')) {
+          console.error('Spotify API endpoint not found. This may be a temporary Spotify service issue.');
+        }
         this.initializationPromise = null;
         resolve(false);
       });
@@ -230,8 +238,8 @@ export class SpotifyService {
       });
 
       this.player.addListener('account_error', ({ message }) => {
-        console.error('Spotify account error (Premium required):', message);
-        console.error('Spotify requires a Premium account to use the Web Playback SDK');
+        console.error('Spotify account error:', message);
+        console.error('Error details:', message);
         clearTimeout(timeoutId);
         this.initializationPromise = null;
         resolve(false);
@@ -259,7 +267,6 @@ export class SpotifyService {
       // Not ready handler
       this.player.addListener('not_ready', ({ device_id }) => {
         console.warn('Spotify player disconnected:', device_id);
-        // Only clear the device ID, don't resolve yet
         this.deviceId = null;
       });
 
@@ -272,13 +279,13 @@ export class SpotifyService {
             clearTimeout(timeoutId);
             this.initializationPromise = null;
             resolve(false);
-          } else {
-            console.log('Connect() returned successfully, waiting for ready event...');
-            // Don't resolve here, wait for the 'ready' event
           }
         })
         .catch(error => {
           console.error('Error connecting to Spotify:', error);
+          if (error && error.message && (error.message.includes('404') || error.message.includes('Not Found'))) {
+            console.error('Spotify API endpoint not found. This may be a temporary Spotify service issue.');
+          }
           clearTimeout(timeoutId);
           this.initializationPromise = null;
           resolve(false);

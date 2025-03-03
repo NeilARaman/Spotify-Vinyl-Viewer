@@ -64,70 +64,84 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   
   // Initialize the player
   const initializePlayer = async () => {
-    if (status === 'connecting') return; // Already connecting
-    
-    setStatus('connecting');
-    setError(null);
-    
-    // Load the Spotify Web Playback SDK
     try {
-      if (!document.getElementById('spotify-player')) {
-        // Create a promise to track when the SDK is ready
-        const sdkReadyPromise = new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          script.id = 'spotify-player';
-          script.src = 'https://sdk.scdn.co/spotify-player.js';
-          script.async = true;
-          
-          // Set timeout for SDK loading
-          const timeout = setTimeout(() => {
-            reject(new Error('Spotify SDK loading timed out'));
-          }, 10000); // 10 second timeout
-          
-          // Set up global callback
-          window.onSpotifyWebPlaybackSDKReady = () => {
-            clearTimeout(timeout);
-            resolve();
-          };
-          
-          // Handle script load errors
-          script.onerror = () => {
-            clearTimeout(timeout);
-            reject(new Error('Failed to load Spotify SDK'));
-          };
-          
-          document.body.appendChild(script);
-        });
-        
-        // Wait for SDK to be ready
-        await sdkReadyPromise;
+      if (!spotifyService.isLoggedIn()) {
+        console.log('User not logged in, redirecting to login');
+        setStatus('authenticating');
+        handleLogin();
+        return false;
       }
       
-      // Initialize the player once SDK is ready
-      const success = await spotifyService.initializePlayer((state) => {
-        // Update playing state
-        const isCurrentlyPlaying = !state?.paused;
-        setIsPlaying(isCurrentlyPlaying);
-        onPlaybackStateChange?.(isCurrentlyPlaying);
-        
-        // Update track info when it changes
-        if (state?.track_window?.current_track) {
-          const { name, artists } = state.track_window.current_track;
-          onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
+      setStatus('connecting');
+      console.log('Initializing Spotify player...');
+      
+      // Add a listener for uncaught promise rejections to catch 404 errors
+      const rejectionHandler = (event: PromiseRejectionEvent) => {
+        console.error('Uncaught promise rejection in Spotify Player:', event.reason);
+        if (event.reason && event.reason.message && 
+           (event.reason.message.includes('404') || 
+            event.reason.message.includes('Not Found') ||
+            event.reason.toString().includes('PlayLoad event failed'))) {
+          setError("Spotify API endpoint returned 404 Not Found. This is likely a temporary issue with Spotify's servers.");
+          setStatus('error');
         }
-      });
+      };
       
-      if (success) {
-        setStatus('ready');
-        loadPlaylists();
-      } else {
-        setError('Please ensure you have Spotify Premium and are logged in with the correct account.');
-        setStatus('error');
+      window.addEventListener('unhandledrejection', rejectionHandler);
+      
+      // Initialize the player with a timeout
+      const success = await Promise.race([
+        spotifyService.initializePlayer((state) => {
+          // Update playing state
+          const isCurrentlyPlaying = !state?.paused;
+          setIsPlaying(isCurrentlyPlaying);
+          onPlaybackStateChange?.(isCurrentlyPlaying);
+          
+          // Update track info when it changes
+          if (state?.track_window?.current_track) {
+            const { name, artists } = state.track_window.current_track;
+            onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
+          }
+        }),
+        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 30000))
+      ]);
+      
+      // Remove the listener
+      window.removeEventListener('unhandledrejection', rejectionHandler);
+
+      if (!success) {
+        console.error('Failed to initialize Spotify player');
+        
+        // Check if there's already an error set from the rejection handler
+        if (status !== 'error') {
+          setError("Could not connect to Spotify. Please check that you have Spotify Premium and try again.");
+          setStatus('error');
+        }
+        
+        return false;
       }
+
+      console.log('Spotify player initialized successfully');
+      setStatus('ready');
+      // Load playlists after successful player initialization
+      loadPlaylists();
+      return true;
     } catch (err) {
-      console.error('Player initialization error:', err);
-      setError('Could not connect to Spotify. Please ensure you have Spotify Premium and try again.');
+      console.error('Error initializing Spotify player:', err);
+      
+      let errorMessage = "Failed to connect to Spotify.";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Check for 404 errors
+        if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+          errorMessage = "Spotify API endpoint returned 404 Not Found. This is likely a temporary issue with Spotify's servers.";
+        }
+      }
+      
+      setError(errorMessage);
       setStatus('error');
+      return false;
     }
   };
   
@@ -214,6 +228,73 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     }, 1000);
   }, [status, retryCount, initializePlayer]);
   
+  // Add a function to analyze errors and determine the most helpful message
+  const getErrorMessage = (error: string | null): { message: string, cause: string, solutions: string[] } => {
+    if (!error) {
+      return {
+        message: "Unknown connection error",
+        cause: "There was a problem connecting to Spotify",
+        solutions: [
+          "Check your Spotify Premium subscription",
+          "Make sure you're logged into the correct account",
+          "Try refreshing the page"
+        ]
+      };
+    }
+    
+    // Error contains 404
+    if (error.includes('404') || error.toLowerCase().includes('not found')) {
+      return {
+        message: "Spotify API Connection Issue",
+        cause: "We couldn't reach Spotify's servers (404 Not Found)",
+        solutions: [
+          "This is likely a temporary Spotify service issue",
+          "Wait a few minutes and try again",
+          "Try using Spotify in another app to confirm it's working",
+          "Try logging out and back in"
+        ]
+      };
+    }
+    
+    // Error contains authentication or token
+    if (error.toLowerCase().includes('auth') || error.toLowerCase().includes('token')) {
+      return {
+        message: "Authentication Problem",
+        cause: "There was an issue with your Spotify authentication",
+        solutions: [
+          "Try logging out and back in",
+          "Clear your browser cache and cookies",
+          "Make sure you're giving permission to the app when logging in"
+        ]
+      };
+    }
+    
+    // Error contains premium
+    if (error.toLowerCase().includes('premium')) {
+      return {
+        message: "Spotify Premium Required",
+        cause: "This feature requires a Spotify Premium subscription",
+        solutions: [
+          "Verify you have an active Spotify Premium subscription",
+          "Make sure you're logged in with your Premium account",
+          "If you just upgraded to Premium, try restarting your browser"
+        ]
+      };
+    }
+    
+    // Default case
+    return {
+      message: "Connection Issue",
+      cause: error,
+      solutions: [
+        "Check your Spotify Premium subscription",
+        "Make sure you're logged into the correct account",
+        "Try refreshing the page",
+        "Check that no other device is using your Spotify account"
+      ]
+    };
+  };
+  
   // Render different views based on status
   
   // Loading state
@@ -235,6 +316,8 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   
   // Error state
   if (status === 'error') {
+    const errorInfo = getErrorMessage(error);
+    
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 rounded-lg bg-wood-dark/80 backdrop-blur-sm border border-brass/30 shadow-xl">
         <div className="w-16 h-16 mb-6 text-brass">
@@ -243,12 +326,14 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           </svg>
         </div>
         
-        <h3 className="text-2xl font-bold text-brass mb-3">Spotify Connection Issue</h3>
+        <h3 className="text-2xl font-bold text-brass mb-2">{errorInfo.message}</h3>
         
         <div className="text-center mb-6 max-w-md">
-          <p className="text-brass-light mb-3">{error}</p>
+          <p className="text-brass-light mb-3">{errorInfo.cause}</p>
           <p className="text-sm text-brass/70">
-            To use this feature, you need an active Spotify Premium subscription and must be logged in with your Premium account.
+            {error && error.includes('404') 
+              ? "This appears to be a temporary issue with Spotify's servers rather than your account." 
+              : "To use this feature, you need an active Spotify Premium subscription and must be logged in with your Premium account."}
           </p>
         </div>
         
@@ -285,7 +370,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             className="w-full px-6 py-3 bg-wood-light text-brass border border-brass/30 rounded-md flex items-center justify-center transition-all hover:bg-wood disabled:opacity-50 font-medium"
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.48.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
             </svg>
             Connect with Spotify
           </button>
@@ -293,10 +378,9 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           <div className="mt-5 pt-4 border-t border-brass/20 text-xs text-brass/60">
             <p className="mb-1">Troubleshooting:</p>
             <ul className="list-disc list-inside space-y-1">
-              <li>Verify you have a <span className="text-brass-light">Spotify Premium</span> subscription</li>
-              <li>Make sure you're logged into the correct account</li>
-              <li>Try refreshing the page</li>
-              <li>Check that no other device is using your Spotify account</li>
+              {errorInfo.solutions.map((solution, index) => (
+                <li key={index} className={index === 0 ? "text-brass-light" : ""}>{solution}</li>
+              ))}
             </ul>
           </div>
         </div>
