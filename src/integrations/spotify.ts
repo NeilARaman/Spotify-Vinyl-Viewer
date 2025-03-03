@@ -81,7 +81,6 @@ export class SpotifyService {
   private initializationPromise: Promise<boolean> | null = null;
   private connectionAttempts: number = 0;
   private readonly MAX_CONNECTION_ATTEMPTS = 3;
-  private previousVolume: number = 0.5; // Store previous volume when muting
 
   private constructor() {
     // Restore tokens from local storage if available
@@ -566,95 +565,6 @@ export class SpotifyService {
       await this.player.setVolume(volume);
     } catch (err) {
       console.error('Error setting volume:', err);
-    }
-  }
-  
-  async getCurrentVolume(): Promise<number> {
-    try {
-      // Try to get the current volume from the Spotify Web API
-      if (this.accessToken) {
-        const response = await fetch('https://api.spotify.com/v1/me/player', {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && typeof data.device?.volume_percent === 'number') {
-            // Convert percentage (0-100) to decimal (0-1)
-            return data.device.volume_percent / 100;
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error getting current volume:', err);
-    }
-    
-    // Fall back to default volume if we couldn't get it
-    return this.previousVolume;
-  }
-
-  async mute(): Promise<void> {
-    if (!this.player) return;
-    
-    try {
-      // Store current volume before muting
-      // First try to get it from the Web API
-      this.previousVolume = await this.getCurrentVolume();
-      
-      // Store at least 0.2 (20%) to avoid silent playback when unmuting
-      if (this.previousVolume < 0.2) {
-        this.previousVolume = 0.5;
-      }
-      
-      console.log('Muting - stored previous volume:', this.previousVolume);
-      
-      // Set volume to 0
-      await this.player.setVolume(0);
-    } catch (err) {
-      console.error('Error muting player:', err);
-    }
-  }
-  
-  async unmute(): Promise<void> {
-    if (!this.player) return;
-    
-    try {
-      console.log('Unmuting - restoring volume to:', this.previousVolume);
-      // Restore previous volume
-      await this.player.setVolume(this.previousVolume);
-    } catch (err) {
-      console.error('Error unmuting player:', err);
-    }
-  }
-  
-  async toggleMute(isMuted: boolean): Promise<void> {
-    // Ensure the Spotify Player is available
-    if (!this.player) {
-      console.error('No Spotify player available');
-      return;
-    }
-    
-    try {
-      if (isMuted) {
-        console.log('Toggling mute ON');
-        // Save current volume first, then mute
-        this.previousVolume = await this.getCurrentVolume();
-        // Ensure minimum restore volume
-        if (this.previousVolume < 0.2) {
-          this.previousVolume = 0.5;
-        }
-        // Set volume to 0
-        await this.player.setVolume(0);
-      } else {
-        console.log('Toggling mute OFF, restoring to', this.previousVolume);
-        // Restore to previous volume
-        await this.player.setVolume(this.previousVolume);
-      }
-    } catch (err) {
-      console.error('Error toggling mute:', err);
-      throw err; // Propagate error to UI
     }
   }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack } from "lucide-react";
 import { spotifyService } from "../integrations/spotify";
 
 interface RecordPlayerProps {
@@ -12,17 +12,7 @@ interface RecordPlayerProps {
 
 const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) => {
   const [isControlDisabled, setIsControlDisabled] = useState(false);
-  const [isMuteDisabled, setIsMuteDisabled] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-
-  // Reset mute state when a new track starts playing
-  useEffect(() => {
-    if (isPlaying && isMuted) {
-      // If playback starts and we're muted, automatically unmute
-      handleMuteToggle(false);
-    }
-  }, [isPlaying, currentTrack]);
-
+  
   const handlePlayPause = async () => {
     if (!spotifyService.isLoggedIn() || isControlDisabled) return;
     
@@ -63,27 +53,8 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
     }
   };
 
-  const handleMuteToggle = async (newMuteState: boolean) => {
-    if (!spotifyService.isLoggedIn() || isMuteDisabled) return;
-    
-    // Update UI state immediately for a responsive feel
-    setIsMuted(newMuteState);
-    
-    // Set a brief timeout for the disabled state to prevent double-clicks
-    setIsMuteDisabled(true);
-    setTimeout(() => setIsMuteDisabled(false), 300);
-    
-    // Call the service in the background - don't await it
-    spotifyService.toggleMute(newMuteState).catch(error => {
-      console.error('Failed to toggle mute state:', error);
-      // Only revert UI if there's an error
-      setIsMuted(!newMuteState);
-    });
-  };
-
   // Determine if controls should appear disabled
   const buttonDisabledClass = isControlDisabled ? 'opacity-50 cursor-not-allowed' : '';
-  const muteDisabledClass = isMuteDisabled ? 'opacity-50 cursor-not-allowed' : '';
 
   return (
     <div className="relative w-full max-w-2xl mx-auto p-8 bg-wood rounded-lg shadow-2xl transform transition-all duration-500 hover:scale-[1.02]">
@@ -111,20 +82,6 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
         <div className={`absolute top-16 right-16 w-48 h-4 bg-brass-dark rounded-full origin-right transform transition-all duration-1000 ${isPlaying ? 'rotate-15' : 'rotate-2'}`}>
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-brass"></div>
         </div>
-
-        {/* Volume control */}
-        <button 
-          onClick={() => handleMuteToggle(!isMuted)}
-          className={`absolute bottom-4 right-4 p-2 rounded-full ${isMuted ? 'bg-brass/30' : 'bg-brass/10'} hover:bg-brass/30 transition-colors ${muteDisabledClass}`}
-          title={isMuted ? "Unmute" : "Mute"}
-          disabled={isMuteDisabled}
-        >
-          {isMuted ? (
-            <VolumeX className="w-5 h-5 text-brass-dark" />
-          ) : (
-            <Volume2 className="w-5 h-5 text-brass-dark" />
-          )}
-        </button>
       </div>
 
       {/* Controls */}
