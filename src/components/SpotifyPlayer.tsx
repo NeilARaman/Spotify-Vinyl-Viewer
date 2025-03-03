@@ -530,10 +530,15 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
                 spotifyService.logout();
                 window.location.reload();
               }}
-              className="px-6 py-3 bg-transparent border border-brass text-brass rounded-lg hover:bg-brass/10 transition-colors"
+              className="flex items-center space-x-1 bg-transparent text-amber-600/90 hover:text-amber-500 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
             >
-              Logout & Reconnect
-        </button>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       </div>
@@ -579,17 +584,14 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="px-4 py-1.5 bg-amber-300 rounded-md hover:bg-amber-400 transition-all text-sm font-bold shadow-md"
-            aria-label="Logout"
+            className="flex items-center space-x-1 bg-transparent text-amber-600/90 hover:text-amber-500 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
           >
-            <span className="flex items-center gap-1.5 text-amber-950 drop-shadow-[0_1px_1px_rgba(0,0,0,0.4)]">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-              </svg>
-              Logout
-            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Logout</span>
           </button>
         )}
       </div>
