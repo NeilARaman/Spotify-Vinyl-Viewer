@@ -295,67 +295,121 @@ export class SpotifyService {
     return this.initializationPromise;
   }
 
+  async getUserSavedTracks(): Promise<any> {
+    if (!this.accessToken || !this.isLoggedIn()) {
+      console.error('Not logged in to Spotify');
+      return null;
+    }
+
+    try {
+      const response = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('Access token expired or invalid');
+          this.clearTokens();
+          return null;
+        }
+        throw new Error(`Error fetching saved tracks: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Create a "playlist-like" object for the Liked Songs
+      return {
+        id: 'liked-songs',
+        name: 'Liked Songs',
+        description: 'Your Liked Songs collection',
+        images: [{ url: 'https://t.scdn.co/images/3099b3803ad9496896c43f22fe9be8c4.png' }],
+        tracks: {
+          total: data.total
+        },
+        type: 'liked-songs',
+        uri: 'spotify:user:liked-songs'
+      };
+    } catch (error) {
+      console.error('Error fetching user saved tracks:', error);
+      return null;
+    }
+  }
+
   async getUserPlaylists(): Promise<any[]> {
-    if (!this.accessToken || this.isTokenExpired()) {
-      console.warn('Token missing or expired when fetching playlists');
+    if (!this.accessToken || !this.isLoggedIn()) {
+      console.error('Not logged in to Spotify');
       return [];
     }
-    
+
     try {
       const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`
         }
       });
-      
-      if (response.status === 401) {
-        // Token is invalid or expired
-        console.warn('Spotify token expired or invalid. Clearing token.');
-        this.clearTokens();
-        return [];
-      }
-      
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch playlists: ${response.status} ${response.statusText}`);
+        if (response.status === 401) {
+          console.error('Access token expired or invalid');
+          this.clearTokens();
+          return [];
+        }
+        throw new Error(`Error fetching playlists: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      return data.items || [];
+      
+      // Get the Liked Songs collection
+      const likedSongs = await this.getUserSavedTracks();
+      
+      // Add Liked Songs at the beginning of the playlists array if available
+      return likedSongs 
+        ? [likedSongs, ...data.items] 
+        : data.items;
     } catch (error) {
-      console.error('Error fetching playlists:', error);
+      console.error('Error fetching user playlists:', error);
       return [];
     }
   }
 
   async playPlaylist(playlistId: string) {
-    if (!this.player || !this.accessToken || !this.deviceId || this.isTokenExpired()) {
-      console.error('Player not ready or token expired');
+    if (!this.deviceId) {
+      console.error('No active device');
       return;
     }
 
     try {
-      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+      // Special handling for liked songs
+      if (playlistId === 'liked-songs') {
+        // Play user's liked songs
+        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            context_uri: 'spotify:user:spotify:collection:tracks'
+          })
+        });
+        return;
+      }
+
+      // Regular playlist
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          context_uri: `spotify:playlist:${playlistId}`,
-          position_ms: 0
+          context_uri: `spotify:playlist:${playlistId}`
         })
       });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        // Extract helpful info from the error
-        const error = new Error(`Error ${response.status}: ${errorText}`);
-        console.error('Playback error:', error);
-        throw error;
-      }
     } catch (error) {
-      console.error('Failed to play playlist:', error);
-      throw error;
+      console.error('Error playing playlist:', error);
     }
   }
 

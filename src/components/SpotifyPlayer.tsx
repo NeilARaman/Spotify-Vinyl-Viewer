@@ -27,6 +27,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const [playlistsLoaded, setPlaylistsLoaded] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentTrack, setCurrentTrack] = useState<{ name: string, artist: string } | null>(null);
   
   // Check for authentication on component mount
   useEffect(() => {
@@ -143,9 +144,13 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           setIsPlaying(isCurrentlyPlaying);
           onPlaybackStateChange?.(isCurrentlyPlaying);
           
-          // Update track info when it changes
+          // Update track info if available
           if (state?.track_window?.current_track) {
             const { name, artists } = state.track_window.current_track;
+            setCurrentTrack({
+              name,
+              artist: artists[0]?.name || 'Unknown Artist'
+            });
             onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
           }
         }),
@@ -490,48 +495,73 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   
   // Ready with playlists
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold mb-6 text-brass">Your Vinyl Collection</h2>
-      
-      {noPlaylists && (
-        <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6 text-center mb-6">
-          <p className="text-brass-dark">
-            No playlists found in your Spotify account. Create some playlists and they'll appear here.
-          </p>
-          <button
-            onClick={handleLogin}
-            className="mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
-          >
-            Refresh Playlists
-          </button>
+    <div className="h-full flex flex-col">
+      {/* Player header */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-brass">Spotify</h2>
+        {currentTrack && (
+          <div className="text-right">
+            <p className="text-brass font-medium">{currentTrack.name} - {currentTrack.artist}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Display playlists */}
+      {playlistsLoaded && (
+        <div className="flex-1 overflow-auto">
+          <h3 className="text-lg font-medium text-brass mb-3">Your Playlists</h3>
+          {noPlaylists ? (
+            <p className="text-brass-light">No playlists found.</p>
+          ) : (
+            <div className="space-y-2">
+              {playlists.map(playlist => (
+                <button
+                  key={playlist.id}
+                  onClick={() => playPlaylist(playlist.id)}
+                  className="w-full flex items-center p-3 rounded-lg hover:bg-wood/40 transition-colors text-left group"
+                >
+                  {/* Special icon for Liked Songs */}
+                  {playlist.type === 'liked-songs' ? (
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-700 to-blue-400 rounded-md flex items-center justify-center flex-shrink-0 mr-3">
+                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <img 
+                      src={playlist.images && playlist.images[0] ? playlist.images[0].url : '/default-playlist.jpg'} 
+                      alt={playlist.name} 
+                      className="w-10 h-10 object-cover rounded-md flex-shrink-0 mr-3" 
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-brass truncate group-hover:text-brass-light transition-colors">
+                      {playlist.type === 'liked-songs' ? (
+                        <span className="flex items-center">
+                          Liked Songs
+                          <span className="ml-1 text-pink-500">❤</span>
+                        </span>
+                      ) : (
+                        playlist.name
+                      )}
+                    </p>
+                    <p className="text-sm text-brass-dark truncate">
+                      {playlist.tracks?.total || 0} tracks
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {playlists.map((playlist) => (
-          <div
-            key={playlist.id}
-            className={`bg-wood-light/20 backdrop-blur-sm rounded-lg p-4 hover:shadow-lg transition-all cursor-pointer transform hover:scale-105 ${
-              currentPlaylist === playlist.id ? 'ring-2 ring-brass' : ''
-            }`}
-            onClick={() => playPlaylist(playlist.id)}
-          >
-            {playlist.images?.[0]?.url ? (
-              <img
-                src={playlist.images[0].url}
-                alt={playlist.name}
-                className="w-full h-48 object-cover rounded-md mb-4"
-              />
-            ) : (
-              <div className="w-full h-48 bg-brass/20 flex items-center justify-center rounded-md mb-4">
-                <span className="text-brass">No Cover</span>
-              </div>
-            )}
-            <h3 className="font-semibold text-lg text-brass">{playlist.name}</h3>
-            <p className="text-brass/80">{playlist.tracks.total} tracks</p>
-          </div>
-        ))}
-      </div>
+
+      {/* Loading state */}
+      {!playlistsLoaded && status === 'ready' && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brass"></div>
+        </div>
+      )}
     </div>
   );
 } 
