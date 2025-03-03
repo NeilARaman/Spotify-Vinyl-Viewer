@@ -236,47 +236,69 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Error state
   if (status === 'error') {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 bg-wood-light/30 rounded-xl text-center">
-        <div className="mb-6 text-brass">
-          <h3 className="text-xl font-semibold mb-2">Connection Issue</h3>
-          <p className="mb-4">{error}</p>
-          <p className="text-sm mb-6">
-            {error && error.includes('Spotify') ? 
-              'Please check that you have Spotify Premium and are logged into the correct account.' : 
-              'Please check your connection and try again.'}
+      <div className="flex flex-col items-center justify-center h-full p-8 rounded-lg bg-wood-dark/80 backdrop-blur-sm border border-brass/30 shadow-xl">
+        <div className="w-16 h-16 mb-6 text-brass">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        
+        <h3 className="text-2xl font-bold text-brass mb-3">Spotify Connection Issue</h3>
+        
+        <div className="text-center mb-6 max-w-md">
+          <p className="text-brass-light mb-3">{error}</p>
+          <p className="text-sm text-brass/70">
+            To use this feature, you need an active Spotify Premium subscription and must be logged in with your Premium account.
           </p>
         </div>
         
-        <div className="space-y-3">
+        <div className="space-y-3 w-full max-w-xs">
           <button
             onClick={handleRetry}
             disabled={isLoading}
-            className="px-6 py-2 bg-brass text-white rounded-full flex items-center justify-center transition hover:bg-brass/80 w-full max-w-xs"
+            className="w-full px-6 py-3 bg-brass text-wood-dark rounded-md flex items-center justify-center transition-all hover:bg-brass-light disabled:opacity-50 font-medium"
           >
             {isLoading ? (
               <>
-                <span className="mr-2 h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                <span className="mr-2 h-4 w-4 rounded-full border-2 border-wood-dark border-t-transparent animate-spin"></span>
                 Connecting...
               </>
             ) : (
-              'Try Again'
+              <>
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Try Again
+              </>
             )}
           </button>
           
           <button
             onClick={() => {
               setIsLoading(true);
-              spotifyService.login();
-              setTimeout(() => setIsLoading(false), 5000);
+              spotifyService.logout(); // First logout to clear any state
+              setTimeout(() => {
+                spotifyService.login(); // Then login again
+              }, 500);
             }}
             disabled={isLoading}
-            className="px-6 py-2 bg-transparent border border-brass text-brass rounded-full flex items-center justify-center transition hover:bg-brass/10 w-full max-w-xs"
+            className="w-full px-6 py-3 bg-wood-light text-brass border border-brass/30 rounded-md flex items-center justify-center transition-all hover:bg-wood disabled:opacity-50 font-medium"
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.48.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
             </svg>
             Connect with Spotify
           </button>
+          
+          <div className="mt-5 pt-4 border-t border-brass/20 text-xs text-brass/60">
+            <p className="mb-1">Troubleshooting:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Verify you have a <span className="text-brass-light">Spotify Premium</span> subscription</li>
+              <li>Make sure you're logged into the correct account</li>
+              <li>Try refreshing the page</li>
+              <li>Check that no other device is using your Spotify account</li>
+            </ul>
+          </div>
         </div>
       </div>
     );
