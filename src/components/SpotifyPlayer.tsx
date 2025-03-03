@@ -29,48 +29,20 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const [isLoading, setIsLoading] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<{ name: string, artist: string } | null>(null);
 
-  // Add preconnect for Spotify domains as soon as component mounts
-  useEffect(() => {
-    // Add preconnect link for Spotify domains to improve connection speed
-    const domains = [
-      'https://sdk.scdn.co',
-      'https://api.spotify.com',
-      'https://accounts.spotify.com',
-      'https://gew-spclient.spotify.com'
-    ];
-
-    domains.forEach(domain => {
-      const link = document.createElement('link');
-      link.rel = 'preconnect';
-      link.href = domain;
-      link.crossOrigin = 'anonymous';
-      document.head.appendChild(link);
-    });
-
-    return () => {
-      // Clean up preconnect links
-      document.querySelectorAll('link[rel="preconnect"][href^="https://"]').forEach(el => {
-        if (domains.some(domain => el.getAttribute('href')?.includes(domain))) {
-          el.remove();
-        }
-      });
-    };
-  }, []);
-
   // Check for authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
-      // Handle the callback from Spotify auth
-      if (window.location.hash) {
+    // Handle the callback from Spotify auth
+    if (window.location.hash) {
         setStatus('authenticating');
-        try {
-          const success = spotifyService.handleCallback();
-          if (success) {
+      try {
+        const success = spotifyService.handleCallback();
+        if (success) {
             // Redirect to home page after successful login
-            navigate('/', { replace: true });
+          navigate('/', { replace: true });
             // Skip to connecting since we have a token
             await initializePlayer();
-          } else {
+        } else {
             setError('Unable to connect to Spotify. Please try again.');
             setStatus('error');
           }
@@ -202,15 +174,15 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
         // Create a promise to track when the SDK is ready
         const sdkReadyPromise = new Promise<void>((resolve, reject) => {
           // Create script element
-          const script = document.createElement('script');
-          script.id = 'spotify-player';
-          script.src = 'https://sdk.scdn.co/spotify-player.js';
-          script.async = true;
+      const script = document.createElement('script');
+      script.id = 'spotify-player';
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      script.async = true;
 
-          // Set timeout for SDK loading - reduce from 20s to 10s for faster failure detection
+          // Set timeout for SDK loading
           const timeout = setTimeout(() => {
-            reject(new Error('Spotify SDK loading timed out after 10 seconds'));
-          }, 10000); // 10 second timeout instead of 20
+            reject(new Error('Spotify SDK loading timed out after 20 seconds'));
+          }, 20000); // 20 second timeout
           
           // Set up global callback that Spotify calls when SDK is ready
           window.onSpotifyWebPlaybackSDKReady = () => {
@@ -226,8 +198,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             reject(new Error('Failed to load Spotify SDK. Please check your internet connection and try again.'));
           };
           
-          // Add priority attribute to load the script faster
-          script.setAttribute('fetchpriority', 'high');
           document.body.appendChild(script);
         });
         
@@ -257,7 +227,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       
       window.addEventListener('unhandledrejection', rejectionHandler);
       
-      // Initialize the player with a timeout (reduced from 30s to 15s)
+      // Initialize the player with a timeout
       const success = await Promise.race([
         spotifyService.initializePlayer((state) => {
           // Update playing state
@@ -275,7 +245,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
           }
         }),
-        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 15000)) // 15 seconds instead of 30
+        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 30000))
       ]);
       
       // Remove the listener
@@ -609,12 +579,12 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="px-4 py-2 bg-brass text-dark-wood rounded-lg hover:bg-brass/80 transition-colors text-sm flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-brass text-dark-brown hover:bg-brass/80 transition-colors duration-300 font-medium shadow-md"
+            aria-label="Logout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V9.5a.5.5 0 01.5-.5h1a.5.5 0 01.5.5V16a3 3 0 01-3 3H3a3 3 0 01-3-3V4a3 3 0 013-3h9.5a.5.5 0 01.5.5v1a.5.5 0 01-.5.5H3z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M11.293 1.293a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L14.586 8H7a1 1 0 010-2h7.586l-3.293-3.293a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
             Logout
           </button>
@@ -662,7 +632,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               />
             )}
             <h3 className="font-semibold text-lg text-brass">
-              {playlist.type === 'liked-songs' ? 'Liked Songs ❤' : playlist.name}
+              {playlist.type === 'liked-songs' ? 'Liked Songs' : playlist.name}
             </h3>
             <p className="text-brass/80">{playlist.tracks?.total || 0} tracks</p>
           </div>

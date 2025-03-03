@@ -82,8 +82,6 @@ export class SpotifyService {
   private connectionAttempts: number = 0;
   private readonly MAX_CONNECTION_ATTEMPTS = 3;
   private previousVolume: number = 0.5; // Store previous volume when muting
-  private trackMetadataCache: Map<string, any> = new Map(); // Cache for track metadata
-  private playbackQueue: string[] = []; // Store URIs of upcoming tracks
 
   private constructor() {
     // Restore tokens from local storage if available
@@ -441,76 +439,7 @@ export class SpotifyService {
     }
   }
 
-  /**
-   * Preloads track metadata for a playlist to speed up transitions
-   * @param playlistId The ID of the playlist to preload
-   */
-  async preloadPlaylistTracks(playlistId: string): Promise<void> {
-    if (!this.isLoggedIn()) return;
-    
-    try {
-      // Don't preload if we're dealing with liked songs, as they can be numerous
-      if (playlistId === 'liked-songs') {
-        return;
-      }
-      
-      console.log(`Preloading metadata for playlist: ${playlistId}`);
-      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`
-        }
-      });
-      
-      if (!response.ok) return;
-      
-      const data = await response.json();
-      
-      // Cache the track metadata by track URI
-      data.items.forEach((item: any) => {
-        if (item.track) {
-          this.trackMetadataCache.set(item.track.uri, item.track);
-        }
-      });
-      
-      console.log(`Preloaded ${data.items.length} tracks for playlist ${playlistId}`);
-    } catch (error) {
-      console.warn('Failed to preload playlist tracks:', error);
-    }
-  }
-
-  /**
-   * Preloads the next few tracks in the queue for faster transitions
-   */
-  async preloadQueue(): Promise<void> {
-    if (!this.isLoggedIn() || !this.deviceId) return;
-    
-    try {
-      console.log('Preloading queue data for smoother transitions');
-      const response = await fetch('https://api.spotify.com/v1/me/player/queue', {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`
-        }
-      });
-      
-      if (!response.ok) {
-        console.warn(`Failed to get queue: ${response.status}`);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      // Store the queue URIs for faster track changes
-      if (data.queue && Array.isArray(data.queue)) {
-        this.playbackQueue = data.queue.slice(0, 5).map((track: any) => track.uri);
-        console.log(`Preloaded ${this.playbackQueue.length} tracks in queue`);
-      }
-    } catch (error) {
-      console.warn('Failed to preload queue:', error);
-    }
-  }
-
-  // Modify the playPlaylist method to trigger queue preloading
-  async playPlaylist(playlistId: string, deviceId?: string): Promise<void> {
+  async playPlaylist(playlistId: string) {
     if (!this.deviceId) {
       console.error('No active device');
       return;
@@ -583,13 +512,6 @@ export class SpotifyService {
         console.error(`Error playing playlist: Status ${response.status}`, errorText);
         throw new Error(`Failed to play playlist: ${response.status} ${errorText}`);
       }
-
-      // After successful playback start, preload queue in the background
-      if (response.ok) {
-        // Don't await these - let them happen in the background
-        this.preloadPlaylistTracks(playlistId);
-        this.preloadQueue();
-      }
     } catch (error) {
       console.error('Error playing playlist:', error);
       throw error; // Re-throw to allow handling in the component
@@ -615,42 +537,13 @@ export class SpotifyService {
     }
   }
 
-  // Add faster track skipping by using preloaded queue info
   async nextTrack(): Promise<void> {
-    if (!this.player) {
-      console.error('Player not initialized');
-      return;
-    }
+    if (!this.player) return;
     
-    // If we have preloaded queue data, we can optimize transitions
-    if (this.playbackQueue.length > 0) {
-      console.log('Using preloaded queue data for faster track change');
-      // Update UI immediately for a more responsive feel
-      this.notifyStateChange();
-    }
-    
-    // Then actually change the track
-    await this.player.nextTrack();
-    
-    // After changing track, preload queue again in the background
-    this.preloadQueue();
-  }
-
-  // Helper to notify about state changes immediately for a more responsive UI
-  private notifyStateChange(): void {
-    if (this.stateCallback) {
-      // Create a minimal PlaybackState to trigger UI updates faster
-      const state = this.lastState || {
-        paused: false,
-        track_window: {
-          current_track: {
-            name: "Loading next track...",
-            artists: [{ name: "Please wait" }]
-          }
-        }
-      };
-      
-      this.stateCallback(state);
+    try {
+      await this.player.nextTrack();
+    } catch (err) {
+      console.error('Error skipping to next track:', err);
     }
   }
 
@@ -753,11 +646,6 @@ export class SpotifyService {
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('spotify_refresh_token');
     localStorage.removeItem('spotify_expires_at');
-  }
-
-  // Add a method to get cached track metadata if available
-  getTrackMetadata(trackUri: string): any | null {
-    return this.trackMetadataCache.get(trackUri) || null;
   }
 }
 
