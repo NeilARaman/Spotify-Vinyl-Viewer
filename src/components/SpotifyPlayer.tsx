@@ -29,6 +29,34 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const [isLoading, setIsLoading] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<{ name: string, artist: string } | null>(null);
 
+  // Add preconnect for Spotify domains as soon as component mounts
+  useEffect(() => {
+    // Add preconnect link for Spotify domains to improve connection speed
+    const domains = [
+      'https://sdk.scdn.co',
+      'https://api.spotify.com',
+      'https://accounts.spotify.com',
+      'https://gew-spclient.spotify.com'
+    ];
+
+    domains.forEach(domain => {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = domain;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    });
+
+    return () => {
+      // Clean up preconnect links
+      document.querySelectorAll('link[rel="preconnect"][href^="https://"]').forEach(el => {
+        if (domains.some(domain => el.getAttribute('href')?.includes(domain))) {
+          el.remove();
+        }
+      });
+    };
+  }, []);
+
   // Check for authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -174,15 +202,15 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
         // Create a promise to track when the SDK is ready
         const sdkReadyPromise = new Promise<void>((resolve, reject) => {
           // Create script element
-      const script = document.createElement('script');
-      script.id = 'spotify-player';
-      script.src = 'https://sdk.scdn.co/spotify-player.js';
-      script.async = true;
+          const script = document.createElement('script');
+          script.id = 'spotify-player';
+          script.src = 'https://sdk.scdn.co/spotify-player.js';
+          script.async = true;
 
-          // Set timeout for SDK loading
+          // Set timeout for SDK loading - reduce from 20s to 10s for faster failure detection
           const timeout = setTimeout(() => {
-            reject(new Error('Spotify SDK loading timed out after 20 seconds'));
-          }, 20000); // 20 second timeout
+            reject(new Error('Spotify SDK loading timed out after 10 seconds'));
+          }, 10000); // 10 second timeout instead of 20
           
           // Set up global callback that Spotify calls when SDK is ready
           window.onSpotifyWebPlaybackSDKReady = () => {
@@ -198,6 +226,8 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             reject(new Error('Failed to load Spotify SDK. Please check your internet connection and try again.'));
           };
           
+          // Add priority attribute to load the script faster
+          script.setAttribute('fetchpriority', 'high');
           document.body.appendChild(script);
         });
         
@@ -227,7 +257,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       
       window.addEventListener('unhandledrejection', rejectionHandler);
       
-      // Initialize the player with a timeout
+      // Initialize the player with a timeout (reduced from 30s to 15s)
       const success = await Promise.race([
         spotifyService.initializePlayer((state) => {
           // Update playing state
@@ -245,7 +275,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
           }
         }),
-        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 30000))
+        new Promise<boolean>(resolve => setTimeout(() => resolve(false), 15000)) // 15 seconds instead of 30
       ]);
       
       // Remove the listener

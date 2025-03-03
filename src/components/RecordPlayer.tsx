@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX } from "lucide-react";
 import { spotifyService } from "../integrations/spotify";
 
@@ -14,7 +14,9 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
   const [isControlDisabled, setIsControlDisabled] = useState(false);
   const [isMuteDisabled, setIsMuteDisabled] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-
+  const [showTrackChange, setShowTrackChange] = useState(false);
+  const prevTrackRef = useRef<string | undefined>();
+  
   // Reset mute state when a new track starts playing
   useEffect(() => {
     if (isPlaying && isMuted) {
@@ -22,6 +24,29 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
       handleMuteToggle(false);
     }
   }, [isPlaying, currentTrack]);
+  
+  // Show visual indicator when track changes
+  useEffect(() => {
+    const currentTrackName = currentTrack?.name;
+    
+    // Check if this is an actual track change (not initial load)
+    if (prevTrackRef.current && currentTrackName && prevTrackRef.current !== currentTrackName) {
+      // Show track change indicator
+      setShowTrackChange(true);
+      
+      // Hide it after a short delay
+      const timeout = setTimeout(() => {
+        setShowTrackChange(false);
+      }, 2000);
+      
+      return () => clearTimeout(timeout);
+    }
+    
+    // Update the ref for next comparison
+    if (currentTrackName) {
+      prevTrackRef.current = currentTrackName;
+    }
+  }, [currentTrack?.name]);
 
   const handlePlayPause = async () => {
     if (!spotifyService.isLoggedIn() || isControlDisabled) return;
@@ -94,12 +119,22 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
         </span>
       </div>
       
+      {/* Track change indicator */}
+      {showTrackChange && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-brass-light/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg animate-fade-in">
+          <span className="text-wood-dark text-sm font-medium">Now Playing: {currentTrack?.name}</span>
+        </div>
+      )}
+      
       {/* Turntable */}
       <div className="relative h-96 bg-wood-dark rounded-lg p-8 overflow-hidden">
         {/* Platter */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-vinyl shadow-lg">
           {/* Record */}
-          <div className={`w-full h-full rounded-full record-groove ${isPlaying ? 'animate-spin-slow' : ''} transition-all duration-1000`}>
+          <div 
+            className={`w-full h-full rounded-full record-groove transition-all duration-300 ${isPlaying ? 'animate-spin-slow' : ''}`}
+            style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
+          >
             {/* Label */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-brass-light flex items-center justify-center">
               <span className="text-vinyl text-xs font-playfair font-semibold">33⅓ RPM</span>
@@ -108,7 +143,7 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
         </div>
 
         {/* Tonearm */}
-        <div className={`absolute top-16 right-16 w-48 h-4 bg-brass-dark rounded-full origin-right transform transition-all duration-1000 ${isPlaying ? 'rotate-15' : 'rotate-2'}`}>
+        <div className={`absolute top-16 right-16 w-48 h-4 bg-brass-dark rounded-full origin-right transform transition-all duration-300 ${isPlaying ? 'rotate-15' : 'rotate-2'}`}>
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-brass"></div>
         </div>
 
@@ -164,10 +199,10 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
       {/* Now Playing */}
       <div className="mt-6 text-center">
         <p className="font-playfair text-brass-dark text-sm">Now Playing</p>
-        <h2 className="font-playfair text-xl font-semibold mt-1 text-brass line-clamp-1">
+        <h2 className="font-playfair text-xl font-semibold mt-1 text-brass line-clamp-1 transition-all duration-300">
           {currentTrack?.name || 'Select a Playlist'}
         </h2>
-        <p className="font-inter text-brass-dark/80 text-sm mt-1 line-clamp-1">
+        <p className="font-inter text-brass-dark/80 text-sm mt-1 line-clamp-1 transition-all duration-300">
           {currentTrack?.artist || 'Your Vinyl Collection'}
         </p>
       </div>
