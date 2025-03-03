@@ -154,6 +154,20 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     };
   }, [navigate]);
 
+  // Call onPlaybackStateChange when isPlaying changes
+  useEffect(() => {
+    if (onPlaybackStateChange) {
+      onPlaybackStateChange(isPlaying);
+    }
+  }, [isPlaying, onPlaybackStateChange]);
+
+  // Call onTrackChange when currentTrack changes
+  useEffect(() => {
+    if (currentTrack && onTrackChange) {
+      onTrackChange(currentTrack.name, currentTrack.artist);
+    }
+  }, [currentTrack, onTrackChange]);
+
   // Initialize the player
   const initializePlayer = async () => {
     try {
@@ -233,8 +247,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           // Update playing state
           const isCurrentlyPlaying = !state?.paused;
           setIsPlaying(isCurrentlyPlaying);
-          onPlaybackStateChange?.(isCurrentlyPlaying);
-
+          
           // Update track info if available
           if (state?.track_window?.current_track) {
             const { name, artists } = state.track_window.current_track;
@@ -242,7 +255,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               name,
               artist: artists[0]?.name || 'Unknown Artist'
             });
-            onTrackChange?.(name, artists[0]?.name || 'Unknown Artist');
           }
         }),
         new Promise<boolean>(resolve => setTimeout(() => resolve(false), 30000))
@@ -530,7 +542,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
                 spotifyService.logout();
                 window.location.reload();
               }}
-              className="flex items-center space-x-1 bg-transparent text-amber-600/90 hover:text-amber-500 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
+              className="flex items-center space-x-1 bg-amber-950/80 text-amber-500 hover:text-amber-400 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -584,7 +596,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="flex items-center space-x-1 bg-transparent text-amber-600/90 hover:text-amber-500 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
+            className="flex items-center space-x-1 bg-amber-950/80 text-amber-500 hover:text-amber-400 py-1.5 px-3 rounded-md font-medium border border-amber-700/30"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
