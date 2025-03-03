@@ -62,7 +62,8 @@ const SCOPES = [
   'streaming',
   'user-read-playback-state',
   'user-modify-playback-state',
-  'user-read-currently-playing'
+  'user-read-currently-playing',
+  'user-library-read'
 ];
 
 // Console log the actual redirect URL being used - can be removed after debugging
@@ -324,7 +325,7 @@ export class SpotifyService {
         id: 'liked-songs',
         name: 'Liked Songs',
         description: 'Your Liked Songs collection',
-        images: [{ url: 'https://t.scdn.co/images/3099b3803ad9496896c43f22fe9be8c4.png' }],
+        images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.png' }],
         tracks: {
           total: data.total
         },
