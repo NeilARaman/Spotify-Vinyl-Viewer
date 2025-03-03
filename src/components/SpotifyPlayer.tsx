@@ -579,15 +579,17 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="px-4 py-2 bg-brass text-dark-brown rounded-lg hover:brightness-110 transition-all border-2 border-amber-700/30 text-sm flex items-center gap-2 font-bold shadow-md"
+            className="px-4 py-1.5 bg-brass/90 text-dark-brown rounded-md hover:bg-brass transition-all text-sm font-medium shadow-sm"
             aria-label="Logout"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-            Logout
+            <span className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              Logout
+            </span>
           </button>
         )}
       </div>
