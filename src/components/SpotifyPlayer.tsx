@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { spotifyService } from '../integrations/spotify';
+import { Loader2 } from 'lucide-react';
 
 interface SpotifyPlayerProps {
   onPlaybackStateChange?: (isPlaying: boolean) => void;
@@ -15,34 +16,45 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const [error, setError] = useState<string | null>(null);
   const [currentPlaylist, setCurrentPlaylist] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Handle the callback from Spotify auth
     if (window.location.hash) {
-      console.log('Found hash in URL, attempting callback handling');
+      console.log('SpotifyPlayer: Found hash in URL, attempting callback handling');
+      console.log('SpotifyPlayer: Hash content:', window.location.hash);
+      
       try {
         const success = spotifyService.handleCallback();
-        console.log('Callback handling result:', success);
+        console.log('SpotifyPlayer: Callback handling result:', success);
+        
         if (success) {
+          console.log('SpotifyPlayer: Login successful, redirecting home');
           setIsLoggedIn(true);
           // Navigate back to home page after successful login
           navigate('/', { replace: true });
         } else {
-          setError('Failed to get access token from Spotify');
+          console.error('SpotifyPlayer: Failed to get access token from Spotify');
+          setError('Failed to get access token from Spotify. Please try logging in again.');
         }
       } catch (err) {
-        console.error('Error handling Spotify callback:', err);
-        setError('Error handling Spotify authentication');
+        console.error('SpotifyPlayer: Error handling Spotify callback:', err);
+        setError('Error handling Spotify authentication. Please try again.');
       }
+    } else {
+      console.log('SpotifyPlayer: No hash in URL, checking if already logged in');
     }
 
     // Check if already logged in
     const isAlreadyLoggedIn = spotifyService.isLoggedIn();
-    console.log('Already logged in:', isAlreadyLoggedIn);
+    console.log('SpotifyPlayer: Already logged in status:', isAlreadyLoggedIn);
+    
     if (isAlreadyLoggedIn) {
       setIsLoggedIn(true);
       initializePlayer();
     }
+    
+    setIsLoading(false);
   }, [navigate]);
 
   useEffect(() => {
@@ -53,7 +65,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   }, [isLoggedIn]);
 
   const initializePlayer = async () => {
-    console.log('Initializing Spotify player...');
     // Load the Spotify Web Playback SDK
     if (!document.getElementById('spotify-player')) {
       const script = document.createElement('script');
@@ -63,7 +74,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
 
       // Add event listener for when the SDK is ready
       window.onSpotifyWebPlaybackSDKReady = async () => {
-        console.log('Spotify Web Playback SDK Ready');
         const success = await spotifyService.initializePlayer((state) => {
           // Update playing state
           setIsPlaying(!state?.paused);
@@ -76,7 +86,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           }
         });
         
-        console.log('Player initialization result:', success);
         if (success) {
           setIsPlayerReady(true);
         } else {
@@ -89,39 +98,70 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   };
 
   const loadPlaylists = async () => {
-    const userPlaylists = await spotifyService.getUserPlaylists();
-    setPlaylists(userPlaylists);
+    setIsLoading(true);
+    try {
+      const userPlaylists = await spotifyService.getUserPlaylists();
+      setPlaylists(userPlaylists);
+    } catch (err) {
+      console.error('Error loading playlists:', err);
+      setError('Failed to load your playlists. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogin = () => {
-    spotifyService.login();
+    console.log('SpotifyPlayer: Initiating Spotify login');
+    try {
+      spotifyService.login();
+    } catch (err) {
+      console.error('SpotifyPlayer: Login error:', err);
+      setError('Error initiating Spotify login. Please try again.');
+    }
   };
 
   const playPlaylist = async (playlistId: string) => {
     if (!isPlayerReady) {
-      console.log('Player not ready yet');
+      setError('Player not ready yet. Please wait a moment and try again.');
       return;
     }
     
     try {
+      setIsLoading(true);
       setCurrentPlaylist(playlistId);
       await spotifyService.playPlaylist(playlistId);
-      console.log('Started playing playlist:', playlistId);
     } catch (err) {
       console.error('Error playing playlist:', err);
       setError('Failed to play playlist. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-brass" />
+        <p className="mt-4 text-brass-dark">Loading...</p>
+      </div>
+    );
+  }
 
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center p-8">
         <p className="text-red-500 mb-4">{error}</p>
         <button
+          onClick={() => setError(null)}
+          className="px-4 py-2 mb-2 bg-brass-light text-wood-dark rounded-lg hover:bg-brass transition-colors"
+        >
+          Dismiss
+        </button>
+        <button
           onClick={handleLogin}
           className="px-6 py-3 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
         >
-          Try Again
+          Reconnect with Spotify
         </button>
       </div>
     );
@@ -146,6 +186,9 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       {!isPlayerReady && (
         <p className="text-yellow-600 mb-4">Initializing Spotify player... Please ensure you have Spotify Premium to play music.</p>
       )}
+      {playlists.length === 0 && !isLoading && (
+        <p className="text-brass-dark mb-4">No playlists found. Create some playlists in your Spotify account to see them here.</p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {playlists.map((playlist) => (
           <div
@@ -155,12 +198,16 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             }`}
             onClick={() => playPlaylist(playlist.id)}
           >
-            {playlist.images?.[0]?.url && (
+            {playlist.images?.[0]?.url ? (
               <img
                 src={playlist.images[0].url}
                 alt={playlist.name}
                 className="w-full h-48 object-cover rounded-md mb-4"
               />
+            ) : (
+              <div className="w-full h-48 bg-brass/20 flex items-center justify-center rounded-md mb-4">
+                <span className="text-brass">No Cover</span>
+              </div>
             )}
             <h3 className="font-semibold text-lg text-brass">{playlist.name}</h3>
             <p className="text-brass/80">{playlist.tracks.total} tracks</p>
