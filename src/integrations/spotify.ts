@@ -84,22 +84,52 @@ export class SpotifyService {
   private previousVolume: number = 0.5; // Store previous volume when muting
 
   private constructor() {
-    // Try to restore the access token from localStorage
+    // Restore tokens from local storage if available
     const storedToken = localStorage.getItem('spotify_access_token');
     const storedExpiration = localStorage.getItem('spotify_token_expiration');
     
     if (storedToken && storedExpiration) {
-      const expirationTime = parseInt(storedExpiration, 10);
-      
-      // Check if token is still valid (with 5-minute buffer)
-      if (Date.now() < expirationTime - 300000) {
-        this.accessToken = storedToken;
-        this.tokenExpiration = expirationTime;
-      } else {
-        // Clear expired token
-        this.clearTokens();
-      }
+      this.accessToken = storedToken;
+      this.tokenExpiration = parseInt(storedExpiration, 10);
     }
+    
+    // Override fetch to intercept and handle cpapi.spotify.com requests
+    // These are analytics events and 404/400 errors are non-critical
+    const originalFetch = window.fetch;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      // Get the URL string regardless of input type
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      
+      try {
+        // Process normally
+        const response = await originalFetch(input, init);
+        
+        // If it's a cpapi request with a 404 or 400 status, log but don't error
+        if (url.includes('cpapi.spotify.com') && (response.status === 404 || response.status === 400)) {
+          console.log(`Non-critical Spotify analytics error: ${response.status} for ${url}`);
+          // Return a synthetic OK response to prevent errors from bubbling up
+          return new Response(JSON.stringify({ok: true}), {
+            status: 200,
+            headers: {'Content-Type': 'application/json'}
+          });
+        }
+        
+        return response;
+      } catch (error) {
+        // If it's a cpapi request, log but don't throw
+        if (url.includes('cpapi.spotify.com')) {
+          console.log(`Suppressed Spotify analytics error for ${url}:`, error);
+          // Return a synthetic OK response
+          return new Response(JSON.stringify({ok: true}), {
+            status: 200,
+            headers: {'Content-Type': 'application/json'}
+          });
+        }
+        
+        // Re-throw for other requests
+        throw error;
+      }
+    };
   }
 
   static getInstance(): SpotifyService {
@@ -419,54 +449,47 @@ export class SpotifyService {
       // Special handling for liked songs
       if (playlistId === 'liked-songs') {
         console.log('Playing liked songs collection');
-        // Play user's liked songs with the correct URI format
-        const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
-          method: 'PUT',
+        
+        // Skip the context_uri approach since it's failing with 400 errors
+        // and go directly to playing track URIs
+        console.log('Using track-by-track approach for liked songs...');
+        // Get the first 50 liked tracks
+        const tracksResponse = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
           headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            // Use correct URI for Liked Songs
-            context_uri: 'spotify:user:spotify:collection:tracks'
-          })
+            'Authorization': `Bearer ${this.accessToken}`
+          }
         });
         
-        // Check for error responses
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Error playing liked songs: Status ${response.status}`, errorText);
-          
-          // If the context_uri approach fails, try with uris of specific tracks
-          if (response.status === 400 || response.status === 404) {
-            console.log('Trying alternative approach for liked songs...');
-            // Get the first 50 liked tracks
-            const tracksResponse = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
+        if (tracksResponse.ok) {
+          const tracksData = await tracksResponse.json();
+          if (tracksData.items && tracksData.items.length > 0) {
+            // Extract track URIs
+            const trackUris = tracksData.items.map((item: any) => item.track.uri);
+            
+            // Play these specific tracks
+            const playResponse = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+              method: 'PUT',
               headers: {
-                'Authorization': `Bearer ${this.accessToken}`
-              }
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                uris: trackUris
+              })
             });
             
-            if (tracksResponse.ok) {
-              const tracksData = await tracksResponse.json();
-              if (tracksData.items && tracksData.items.length > 0) {
-                // Extract track URIs
-                const trackUris = tracksData.items.map((item: any) => item.track.uri);
-                
-                // Play these specific tracks instead
-                await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
-                  method: 'PUT',
-                  headers: {
-                    'Authorization': `Bearer ${this.accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    uris: trackUris
-                  })
-                });
-              }
+            if (!playResponse.ok) {
+              const errorText = await playResponse.text();
+              console.error(`Error playing liked songs: Status ${playResponse.status}`, errorText);
+              throw new Error(`Failed to play liked songs: ${playResponse.status} ${errorText}`);
             }
+          } else {
+            console.log('No liked songs found');
           }
+        } else {
+          const errorText = await tracksResponse.text();
+          console.error(`Error fetching liked songs: Status ${tracksResponse.status}`, errorText);
+          throw new Error(`Failed to fetch liked songs: ${tracksResponse.status} ${errorText}`);
         }
         return;
       }
