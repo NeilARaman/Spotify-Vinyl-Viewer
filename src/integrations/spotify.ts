@@ -1,3 +1,51 @@
+// Add missing type definitions for Spotify SDK
+declare global {
+  interface Window {
+    Spotify: {
+      Player: new (options: any) => Spotify.Player;
+    };
+    onSpotifyWebPlaybackSDKReady: () => void;
+  }
+}
+
+namespace Spotify {
+  export interface Player {
+    connect(): Promise<boolean>;
+    disconnect(): void;
+    addListener(event: 'ready', callback: (event: ReadyEvent) => void): void;
+    addListener(event: 'not_ready', callback: (event: NotReadyEvent) => void): void;
+    addListener(event: 'player_state_changed', callback: (state: PlaybackState | null) => void): void;
+    addListener(event: 'initialization_error' | 'authentication_error' | 'account_error', callback: (event: ErrorEvent) => void): void;
+    getCurrentState(): Promise<PlaybackState | null>;
+    resume(): Promise<void>;
+    pause(): Promise<void>;
+    nextTrack(): Promise<void>;
+    previousTrack(): Promise<void>;
+  }
+
+  export interface ReadyEvent {
+    device_id: string;
+  }
+
+  export interface NotReadyEvent {
+    device_id: string;
+  }
+
+  export interface ErrorEvent {
+    message: string;
+  }
+
+  export interface PlaybackState {
+    paused: boolean;
+    track_window: {
+      current_track: {
+        name: string;
+        artists: Array<{ name: string }>;
+      };
+    };
+  }
+}
+
 // Hardcoded values that are known to work
 const SPOTIFY_CLIENT_ID = 'd0469a1618e4427b87de47779818f74c';
 // For production, use the hardcoded URL, for development use the current origin
@@ -28,6 +76,9 @@ export class SpotifyService {
   private player: Spotify.Player | null = null;
   private deviceId: string | null = null;
   private stateCallback: ((state: Spotify.PlaybackState | null) => void) | null = null;
+  private initializationPromise: Promise<boolean> | null = null;
+  private connectionAttempts: number = 0;
+  private readonly MAX_CONNECTION_ATTEMPTS = 3;
 
   private constructor() {
     // Try to restore the access token from localStorage
@@ -43,8 +94,7 @@ export class SpotifyService {
         this.tokenExpiration = expirationTime;
       } else {
         // Clear expired token
-        localStorage.removeItem('spotify_access_token');
-        localStorage.removeItem('spotify_token_expiration');
+        this.clearTokens();
       }
     }
   }
@@ -57,6 +107,9 @@ export class SpotifyService {
   }
 
   login() {
+    // Reset connection attempts on new login
+    this.connectionAttempts = 0;
+    
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
@@ -89,6 +142,13 @@ export class SpotifyService {
     return false;
   }
 
+  private clearTokens() {
+    localStorage.removeItem('spotify_access_token');
+    localStorage.removeItem('spotify_token_expiration');
+    this.accessToken = null;
+    this.tokenExpiration = null;
+  }
+
   isTokenExpired(): boolean {
     if (!this.tokenExpiration) return true;
     // Consider token expired 5 minutes before actual expiration
@@ -96,28 +156,39 @@ export class SpotifyService {
   }
 
   async initializePlayer(onStateChange?: (state: Spotify.PlaybackState | null) => void): Promise<boolean> {
+    // If already initializing, return the existing promise
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+    
     // Check if token is expired before initializing player
     if (this.isTokenExpired()) {
       console.warn('Spotify access token is expired. Please login again.');
       return false;
     }
     
-    return new Promise((resolve) => {
+    // Increment connection attempts
+    this.connectionAttempts++;
+    
+    // Create a new initialization promise
+    this.initializationPromise = new Promise<boolean>((resolve) => {
       if (!window.Spotify) {
         console.error('Spotify SDK not loaded');
+        this.initializationPromise = null;
         resolve(false);
         return;
       }
 
       this.stateCallback = onStateChange || null;
 
+      // Create player with more robust error handling
       this.player = new window.Spotify.Player({
         name: 'Vinyl Smooth Player',
         getOAuthToken: (cb) => {
           // Check token expiration
           if (this.isTokenExpired()) {
-            console.warn('Token expired during playback. Redirecting to login...');
-            this.login();
+            this.clearTokens();
+            resolve(false);
             return;
           }
           cb(this.accessToken || '');
@@ -125,19 +196,33 @@ export class SpotifyService {
         volume: 0.5
       });
 
-      // Error handling
+      // Set a timeout to prevent hanging initialization
+      const timeoutId = setTimeout(() => {
+        console.warn('Spotify player initialization timed out');
+        this.initializationPromise = null;
+        resolve(false);
+      }, 15000); // 15 second timeout
+
+      // Error handling with better logging
       this.player.addListener('initialization_error', ({ message }) => {
-        console.error('Failed to initialize:', message);
+        console.error('Spotify initialization error:', message);
+        clearTimeout(timeoutId);
+        this.initializationPromise = null;
         resolve(false);
       });
 
       this.player.addListener('authentication_error', ({ message }) => {
-        console.error('Failed to authenticate:', message);
+        console.error('Spotify authentication error:', message);
+        clearTimeout(timeoutId);
+        this.clearTokens(); // Invalid token, clear it
+        this.initializationPromise = null;
         resolve(false);
       });
 
       this.player.addListener('account_error', ({ message }) => {
-        console.error('Failed to validate Spotify account:', message);
+        console.error('Spotify account error (Premium required):', message);
+        clearTimeout(timeoutId);
+        this.initializationPromise = null;
         resolve(false);
       });
 
@@ -149,16 +234,44 @@ export class SpotifyService {
         }
       });
 
-      // Ready
+      // Ready handler
       this.player.addListener('ready', ({ device_id }) => {
-        console.log('Ready with Device ID:', device_id);
+        console.log('Spotify player ready with device ID:', device_id);
         this.deviceId = device_id;
+        clearTimeout(timeoutId);
+        this.initializationPromise = null;
+        
+        // Reset connection attempts on successful connection
+        this.connectionAttempts = 0;
         resolve(true);
       });
 
+      // Not ready handler
+      this.player.addListener('not_ready', ({ device_id }) => {
+        console.warn('Spotify player disconnected:', device_id);
+        // Only clear the device ID, don't resolve yet
+        this.deviceId = null;
+      });
+
       // Connect to the player
-      this.player.connect();
+      this.player.connect()
+        .then(success => {
+          if (!success) {
+            console.error('Failed to connect to Spotify');
+            clearTimeout(timeoutId);
+            this.initializationPromise = null;
+            resolve(false);
+          }
+        })
+        .catch(error => {
+          console.error('Error connecting to Spotify:', error);
+          clearTimeout(timeoutId);
+          this.initializationPromise = null;
+          resolve(false);
+        });
     });
+    
+    return this.initializationPromise;
   }
 
   async getUserPlaylists(): Promise<any[]> {
@@ -168,7 +281,7 @@ export class SpotifyService {
     }
     
     try {
-      const response = await fetch('https://api.spotify.com/v1/me/playlists', {
+      const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`
         }
@@ -177,11 +290,12 @@ export class SpotifyService {
       if (response.status === 401) {
         // Token is invalid or expired
         console.warn('Spotify token expired or invalid. Clearing token.');
-        localStorage.removeItem('spotify_access_token');
-        localStorage.removeItem('spotify_token_expiration');
-        this.accessToken = null;
-        this.tokenExpiration = null;
+        this.clearTokens();
         return [];
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch playlists: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
@@ -199,7 +313,7 @@ export class SpotifyService {
     }
 
     try {
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -210,9 +324,16 @@ export class SpotifyService {
           position_ms: 0
         })
       });
-      console.log('Started playback of playlist:', playlistId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        // Extract helpful info from the error
+        const error = new Error(`Error ${response.status}: ${errorText}`);
+        console.error('Playback error:', error);
+        throw error;
+      }
     } catch (error) {
-      console.error('Error playing playlist:', error);
+      console.error('Failed to play playlist:', error);
       throw error;
     }
   }
@@ -223,22 +344,37 @@ export class SpotifyService {
 
   async togglePlayback(): Promise<void> {
     if (!this.player) return;
-    const state = await this.player.getCurrentState();
-    if (state?.paused) {
-      await this.player.resume();
-    } else {
-      await this.player.pause();
+    
+    try {
+      const state = await this.player.getCurrentState();
+      if (state?.paused) {
+        await this.player.resume();
+      } else {
+        await this.player.pause();
+      }
+    } catch (err) {
+      console.error('Error toggling playback:', err);
     }
   }
 
   async nextTrack(): Promise<void> {
     if (!this.player) return;
-    await this.player.nextTrack();
+    
+    try {
+      await this.player.nextTrack();
+    } catch (err) {
+      console.error('Error skipping to next track:', err);
+    }
   }
 
   async previousTrack(): Promise<void> {
     if (!this.player) return;
-    await this.player.previousTrack();
+    
+    try {
+      await this.player.previousTrack();
+    } catch (err) {
+      console.error('Error going to previous track:', err);
+    }
   }
 }
 
