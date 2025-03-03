@@ -545,15 +545,6 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
           </div>
         ))}
       </div>
-      
-      {/* Display now playing info if there's a current track */}
-      {currentTrack && (
-        <div className="fixed bottom-4 right-4 bg-wood-dark/80 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-brass/30 max-w-xs">
-          <p className="text-brass font-semibold mb-1">Now Playing:</p>
-          <p className="text-brass-light">{currentTrack.name}</p>
-          <p className="text-brass/60 text-sm">{currentTrack.artist}</p>
-        </div>
-      )}
     </div>
   );
 } 
