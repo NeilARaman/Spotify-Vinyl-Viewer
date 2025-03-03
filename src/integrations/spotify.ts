@@ -165,12 +165,19 @@ export class SpotifyService {
     
     // Check if token is expired before initializing player
     if (this.isTokenExpired()) {
-      console.warn('Spotify access token is expired. Please login again.');
+      console.warn('Spotify access token is expired. Refreshing...');
+      // Force a new login if token is expired
+      this.clearTokens();
+      this.login();
       return false;
     }
     
     // Increment connection attempts
     this.connectionAttempts++;
+    
+    // Log information for debugging
+    console.log('Starting Spotify player initialization');
+    console.log('Connection attempt:', this.connectionAttempts);
     
     // Create a new initialization promise
     this.initializationPromise = new Promise<boolean>((resolve) => {
@@ -193,6 +200,7 @@ export class SpotifyService {
             resolve(false);
             return;
           }
+          console.log('Providing access token to Spotify SDK');
           cb(this.accessToken || '');
         },
         volume: 0.5
@@ -200,7 +208,7 @@ export class SpotifyService {
 
       // Set a timeout to prevent hanging initialization
       const timeoutId = setTimeout(() => {
-        console.warn('Spotify player initialization timed out');
+        console.warn('Spotify player initialization timed out after 15 seconds');
         this.initializationPromise = null;
         resolve(false);
       }, 15000); // 15 second timeout
@@ -223,6 +231,7 @@ export class SpotifyService {
 
       this.player.addListener('account_error', ({ message }) => {
         console.error('Spotify account error (Premium required):', message);
+        console.error('Spotify requires a Premium account to use the Web Playback SDK');
         clearTimeout(timeoutId);
         this.initializationPromise = null;
         resolve(false);
@@ -230,7 +239,6 @@ export class SpotifyService {
 
       // Playback status updates
       this.player.addListener('player_state_changed', (state) => {
-        console.log('Player State Changed:', state);
         if (this.stateCallback) {
           this.stateCallback(state);
         }
@@ -255,14 +263,18 @@ export class SpotifyService {
         this.deviceId = null;
       });
 
-      // Connect to the player
+      // Connect to the player with proper error handling
+      console.log('Attempting to connect Spotify player...');
       this.player.connect()
         .then(success => {
           if (!success) {
-            console.error('Failed to connect to Spotify');
+            console.error('Explicit failure connecting to Spotify (connect() returned false)');
             clearTimeout(timeoutId);
             this.initializationPromise = null;
             resolve(false);
+          } else {
+            console.log('Connect() returned successfully, waiting for ready event...');
+            // Don't resolve here, wait for the 'ready' event
           }
         })
         .catch(error => {
@@ -448,6 +460,26 @@ export class SpotifyService {
     } catch (err) {
       console.error('Error toggling mute:', err);
     }
+  }
+
+  // Add the logout method to the SpotifyService class
+  logout(): void {
+    console.log('Logging out of Spotify');
+    this.clearTokens();
+    if (this.player) {
+      try {
+        this.player.disconnect();
+      } catch (error) {
+        console.error('Error disconnecting Spotify player:', error);
+      }
+      this.player = null;
+    }
+    this.deviceId = null;
+    this.initializationPromise = null;
+    this.connectionAttempts = 0;
+    localStorage.removeItem('spotify_access_token');
+    localStorage.removeItem('spotify_refresh_token');
+    localStorage.removeItem('spotify_expires_at');
   }
 }
 
