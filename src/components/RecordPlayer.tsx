@@ -12,6 +12,7 @@ interface RecordPlayerProps {
 
 const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) => {
   const [isControlDisabled, setIsControlDisabled] = useState(false);
+  const [isMuteDisabled, setIsMuteDisabled] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
 
   // Reset mute state when a new track starts playing
@@ -63,24 +64,26 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
   };
 
   const handleMuteToggle = async (newMuteState: boolean) => {
-    if (!spotifyService.isLoggedIn() || isControlDisabled) return;
+    if (!spotifyService.isLoggedIn() || isMuteDisabled) return;
     
-    setIsControlDisabled(true);
+    // Update UI state immediately for a responsive feel
     setIsMuted(newMuteState);
     
-    try {
-      await spotifyService.toggleMute(newMuteState);
-    } catch (error) {
+    // Set a brief timeout for the disabled state to prevent double-clicks
+    setIsMuteDisabled(true);
+    setTimeout(() => setIsMuteDisabled(false), 300);
+    
+    // Call the service in the background - don't await it
+    spotifyService.toggleMute(newMuteState).catch(error => {
       console.error('Failed to toggle mute state:', error);
-      // Revert the mute state if the operation failed
+      // Only revert UI if there's an error
       setIsMuted(!newMuteState);
-    } finally {
-      setTimeout(() => setIsControlDisabled(false), 300);
-    }
+    });
   };
 
   // Determine if controls should appear disabled
   const buttonDisabledClass = isControlDisabled ? 'opacity-50 cursor-not-allowed' : '';
+  const muteDisabledClass = isMuteDisabled ? 'opacity-50 cursor-not-allowed' : '';
 
   return (
     <div className="relative w-full max-w-2xl mx-auto p-8 bg-wood rounded-lg shadow-2xl transform transition-all duration-500 hover:scale-[1.02]">
@@ -111,9 +114,9 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
         {/* Volume control */}
         <button 
           onClick={() => handleMuteToggle(!isMuted)}
-          className={`absolute bottom-4 right-4 p-2 rounded-full ${isMuted ? 'bg-brass/30' : 'bg-brass/10'} hover:bg-brass/30 transition-colors ${buttonDisabledClass}`}
+          className={`absolute bottom-4 right-4 p-2 rounded-full ${isMuted ? 'bg-brass/30' : 'bg-brass/10'} hover:bg-brass/30 transition-colors ${muteDisabledClass}`}
           title={isMuted ? "Unmute" : "Mute"}
-          disabled={isControlDisabled}
+          disabled={isMuteDisabled}
         >
           {isMuted ? (
             <VolumeX className="w-5 h-5 text-brass-dark" />

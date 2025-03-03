@@ -423,10 +423,30 @@ export class SpotifyService {
   }
   
   async toggleMute(isMuted: boolean): Promise<void> {
-    if (isMuted) {
-      await this.mute();
-    } else {
-      await this.unmute();
+    // Ensure the Spotify Player is available
+    if (!this.player) return;
+    
+    try {
+      // Set volume immediately - don't wait for the async operations to complete
+      // This makes the mute action feel more responsive
+      if (isMuted) {
+        // For muting, set volume to 0 immediately
+        if (this.player.setVolume) {
+          this.player.setVolume(0);
+        }
+        
+        // Then store the previous volume asynchronously
+        this.mute().catch(err => console.error('Error in background mute operation:', err));
+      } else {
+        // For unmuting, restore volume immediately
+        if (this.player.setVolume) {
+          this.player.setVolume(this.previousVolume);
+        }
+        
+        // No need for additional async operation here
+      }
+    } catch (err) {
+      console.error('Error toggling mute:', err);
     }
   }
 }
