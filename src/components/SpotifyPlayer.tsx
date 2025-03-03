@@ -230,15 +230,43 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     
     try {
       setCurrentPlaylist(playlistId);
+      setIsLoading(true);
+      console.log(`Attempting to play playlist: ${playlistId}`);
+      
       await spotifyService.playPlaylist(playlistId);
+      
+      // Clear any previous errors if playback succeeds
+      setError(null);
     } catch (err) {
       console.error('Playback error:', err);
-      setError('Could not play this playlist. Please try again or choose another playlist.');
+      let errorMessage = 'Could not play this playlist. Please try again or choose another playlist.';
       
-      // If we get a 403 error, likely not premium
-      if (err instanceof Error && err.message.includes('403')) {
-        setError('Playback failed. Spotify Premium is required to use the Web Playback SDK.');
+      if (err instanceof Error) {
+        const errMsg = err.message.toLowerCase();
+        
+        // Check for specific errors
+        if (errMsg.includes('403') || errMsg.includes('forbidden')) {
+          errorMessage = 'Playback failed. Spotify Premium is required to use the Web Playback SDK.';
+        } else if (errMsg.includes('404') || errMsg.includes('not found')) {
+          errorMessage = 'This content could not be found. It may have been removed or made private.';
+        } else if (errMsg.includes('400') || errMsg.includes('bad request')) {
+          // For liked songs, provide specific guidance
+          if (playlistId === 'liked-songs') {
+            errorMessage = 'Could not play Liked Songs. Please try refreshing the page or logging out and back in.';
+          } else {
+            errorMessage = 'Invalid request. The playlist may be empty or unavailable.';
+          }
+        } else if (errMsg.includes('401') || errMsg.includes('unauthorized')) {
+          // Force logout and re-login for auth issues
+          errorMessage = 'Your Spotify session has expired. Please log in again.';
+          spotifyService.logout();
+          setTimeout(() => handleLogin(), 1500);
+        }
       }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -279,97 +307,60 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     }, 1000);
   }, [status, retryCount, initializePlayer]);
   
-  // Add a function to analyze errors and determine the most helpful message
-  const getErrorMessage = (error: string | null): { message: string, cause: string, solutions: string[] } => {
-    if (!error) {
+  // Helper function to analyze error messages
+  const getErrorMessage = (error: Error | string): { title: string, cause: string, solutions: string[] } => {
+    const errorStr = error instanceof Error ? error.message : error;
+    
+    // SDK not loaded error
+    if (errorStr.includes('SDK') && (errorStr.includes('loading') || errorStr.includes('timed out') || errorStr.includes('not loaded'))) {
       return {
-        message: "Unknown connection error",
-        cause: "There was a problem connecting to Spotify",
+        title: 'Failed to load Spotify SDK',
+        cause: 'The Spotify Web Playback SDK script could not be loaded.',
         solutions: [
-          "Check your Spotify Premium subscription",
-          "Make sure you're logged into the correct account",
-          "Try refreshing the page"
+          'Check your internet connection',
+          'Disable any content blockers or ad blockers',
+          'Try using a different browser',
+          'Clear your browser cache'
         ]
       };
     }
     
-    // SDK loading errors
-    if (error.includes('SDK') || error.includes('script')) {
+    // CloudPlaybackClientError with 404
+    if (errorStr.includes('CloudPlaybackClient') || errorStr.includes('PlayLoad event failed with status 404')) {
       return {
-        message: "Spotify SDK Loading Failed",
-        cause: error,
+        title: 'Spotify Connection Issue',
+        cause: 'The Spotify Web Player had trouble communicating with Spotify servers.',
         solutions: [
-          "Check your internet connection",
-          "Make sure you don't have any content blockers active",
-          "Try using a different browser",
-          "Clear your browser cache and refresh the page"
+          'Log out and log back in',
+          'Make sure you have Spotify Premium',
+          'Try disabling any VPN or proxy',
+          'Use a different browser or clear your cache',
+          'Check if Spotify services are experiencing issues'
         ]
       };
     }
     
-    // Error contains 404
-    if (error.includes('404') || error.toLowerCase().includes('not found')) {
+    // Premium Required Error
+    if (errorStr.includes('Premium') || errorStr.includes('forbidden') || errorStr.includes('403')) {
       return {
-        message: "Spotify API Connection Issue",
-        cause: "We couldn't reach Spotify's servers (404 Not Found)",
+        title: 'Spotify Premium Required',
+        cause: 'The Spotify Web Playback SDK requires a Spotify Premium subscription.',
         solutions: [
-          "This is likely a temporary Spotify service issue",
-          "Wait a few minutes and try again",
-          "Try using Spotify in another app to confirm it's working",
-          "Try logging out and back in"
+          'Upgrade to Spotify Premium',
+          'If you already have Spotify Premium, try logging out and back in',
+          'Check if your subscription is active'
         ]
       };
     }
     
-    // Error contains timeout
-    if (error.toLowerCase().includes('timeout') || error.toLowerCase().includes('timed out')) {
-      return {
-        message: "Connection Timeout",
-        cause: "The connection to Spotify took too long to establish",
-        solutions: [
-          "Check your internet connection speed",
-          "Try again when you have a stronger connection",
-          "Disable any VPN or proxy services",
-          "Try using a different network"
-        ]
-      };
-    }
-    
-    // Error contains authentication or token
-    if (error.toLowerCase().includes('auth') || error.toLowerCase().includes('token')) {
-      return {
-        message: "Authentication Problem",
-        cause: "There was an issue with your Spotify authentication",
-        solutions: [
-          "Try logging out and back in",
-          "Clear your browser cache and cookies",
-          "Make sure you're giving permission to the app when logging in"
-        ]
-      };
-    }
-    
-    // Error contains premium
-    if (error.toLowerCase().includes('premium')) {
-      return {
-        message: "Spotify Premium Required",
-        cause: "This feature requires a Spotify Premium subscription",
-        solutions: [
-          "Verify you have an active Spotify Premium subscription",
-          "Make sure you're logged in with your Premium account",
-          "If you just upgraded to Premium, try restarting your browser"
-        ]
-      };
-    }
-    
-    // Default case
+    // Default error message
     return {
-      message: "Connection Issue",
-      cause: error,
+      title: 'Connection Issue',
+      cause: 'Could not connect to Spotify.',
       solutions: [
-        "Check your Spotify Premium subscription",
-        "Make sure you're logged into the correct account",
-        "Try refreshing the page",
-        "Check that no other device is using your Spotify account"
+        'Check your internet connection',
+        'Try again in a few moments',
+        'Log out and log back in'
       ]
     };
   };
@@ -395,72 +386,63 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   
   // Error state
   if (status === 'error') {
-    const errorInfo = getErrorMessage(error);
+    // Analyze the error message to provide better guidance
+    const errorDetails = getErrorMessage(error || 'Unknown error');
     
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 rounded-lg bg-wood-dark/80 backdrop-blur-sm border border-brass/30 shadow-xl">
-        <div className="w-16 h-16 mb-6 text-brass">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+      <div className="p-8 flex flex-col items-center justify-center h-full">
+        <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-8 max-w-md w-full text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto mb-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-        </div>
-        
-        <h3 className="text-2xl font-bold text-brass mb-2">{errorInfo.message}</h3>
-        
-        <div className="text-center mb-6 max-w-md">
-          <p className="text-brass-light mb-3">{errorInfo.cause}</p>
-          <p className="text-sm text-brass/70">
-            {error && error.includes('404') 
-              ? "This appears to be a temporary issue with Spotify's servers rather than your account." 
-              : "To use this feature, you need an active Spotify Premium subscription and must be logged in with your Premium account."}
-          </p>
-        </div>
-        
-        <div className="space-y-3 w-full max-w-xs">
-          <button
-            onClick={handleRetry}
-            disabled={isLoading}
-            className="w-full px-6 py-3 bg-brass text-wood-dark rounded-md flex items-center justify-center transition-all hover:bg-brass-light disabled:opacity-50 font-medium"
-          >
-            {isLoading ? (
-              <>
-                <span className="mr-2 h-4 w-4 rounded-full border-2 border-wood-dark border-t-transparent animate-spin"></span>
-                Connecting...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Try Again
-              </>
-            )}
-          </button>
           
-          <button
-            onClick={() => {
-              setIsLoading(true);
-              spotifyService.logout(); // First logout to clear any state
-              setTimeout(() => {
-                spotifyService.login(); // Then login again
-              }, 500);
-            }}
-            disabled={isLoading}
-            className="w-full px-6 py-3 bg-wood-light text-brass border border-brass/30 rounded-md flex items-center justify-center transition-all hover:bg-wood disabled:opacity-50 font-medium"
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-            </svg>
-            Connect with Spotify
-          </button>
+          <h3 className="text-xl font-bold text-brass mb-2">{errorDetails.title}</h3>
+          <p className="text-brass-dark mb-4">{errorDetails.cause}</p>
           
-          <div className="mt-5 pt-4 border-t border-brass/20 text-xs text-brass/60">
-            <p className="mb-1">Troubleshooting:</p>
-            <ul className="list-disc list-inside space-y-1">
-              {errorInfo.solutions.map((solution, index) => (
-                <li key={index} className={index === 0 ? "text-brass-light" : ""}>{solution}</li>
-              ))}
-            </ul>
+          {errorDetails.solutions.length > 0 && (
+            <div className="mb-6 text-left">
+              <p className="font-semibold text-brass-dark mb-2">Try these solutions:</p>
+              <ul className="list-disc pl-5 text-brass-dark">
+                {errorDetails.solutions.map((solution, index) => (
+                  <li key={index} className="mb-1">{solution}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handleRetry}
+              disabled={isLoading}
+              className="px-6 py-3 bg-brass text-dark-wood rounded-lg hover:bg-brass/80 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin w-5 h-5" />
+                  <span>Reconnecting...</span>
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 2v6h-6"></path>
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                    <path d="M3 22v-6h6"></path>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                  </svg>
+                  <span>Try Again</span>
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={() => {
+                spotifyService.logout();
+                window.location.reload();
+              }}
+              className="px-6 py-3 bg-transparent border border-brass text-brass rounded-lg hover:bg-brass/10 transition-colors"
+            >
+              Logout & Reconnect
+            </button>
           </div>
         </div>
       </div>
@@ -496,7 +478,27 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Ready with playlists
   return (
     <div className="p-8">
-      <h2 className="text-2xl font-bold mb-6 text-brass">Your Vinyl Collection</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-brass">Your Vinyl Collection</h2>
+        
+        {/* Logout button */}
+        {spotifyService.isLoggedIn() && (
+          <button
+            onClick={() => {
+              spotifyService.logout();
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-brass text-dark-wood rounded-lg hover:bg-brass/80 transition-colors text-sm flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Logout
+          </button>
+        )}
+      </div>
       
       {noPlaylists && (
         <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6 text-center mb-6">

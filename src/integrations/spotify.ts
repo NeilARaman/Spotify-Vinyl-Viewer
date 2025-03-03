@@ -384,22 +384,62 @@ export class SpotifyService {
     try {
       // Special handling for liked songs
       if (playlistId === 'liked-songs') {
-        // Play user's liked songs
-        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+        console.log('Playing liked songs collection');
+        // Play user's liked songs with the correct URI format
+        const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
+            // Use correct URI for Liked Songs
             context_uri: 'spotify:user:spotify:collection:tracks'
           })
         });
+        
+        // Check for error responses
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error playing liked songs: Status ${response.status}`, errorText);
+          
+          // If the context_uri approach fails, try with uris of specific tracks
+          if (response.status === 400 || response.status === 404) {
+            console.log('Trying alternative approach for liked songs...');
+            // Get the first 50 liked tracks
+            const tracksResponse = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`
+              }
+            });
+            
+            if (tracksResponse.ok) {
+              const tracksData = await tracksResponse.json();
+              if (tracksData.items && tracksData.items.length > 0) {
+                // Extract track URIs
+                const trackUris = tracksData.items.map((item: any) => item.track.uri);
+                
+                // Play these specific tracks instead
+                await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+                  method: 'PUT',
+                  headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    uris: trackUris
+                  })
+                });
+              }
+            }
+          }
+        }
         return;
       }
 
       // Regular playlist
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
+      console.log(`Playing playlist: ${playlistId}`);
+      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -409,8 +449,15 @@ export class SpotifyService {
           context_uri: `spotify:playlist:${playlistId}`
         })
       });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error playing playlist: Status ${response.status}`, errorText);
+        throw new Error(`Failed to play playlist: ${response.status} ${errorText}`);
+      }
     } catch (error) {
       console.error('Error playing playlist:', error);
+      throw error; // Re-throw to allow handling in the component
     }
   }
 
