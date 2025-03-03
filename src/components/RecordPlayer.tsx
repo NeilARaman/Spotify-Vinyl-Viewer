@@ -87,8 +87,9 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
 
   return (
     <div className="relative w-full max-w-2xl mx-auto p-8 bg-wood rounded-lg shadow-2xl transform transition-all duration-500 hover:scale-[1.02]">
-      <div className="absolute top-2 right-2">
-        <span className="px-3 py-1 bg-brass/20 text-brass-dark rounded-full text-xs font-inter">
+      {/* Vintage Series Badge - repositioned to be on top of the box rather than overlapping */}
+      <div className="absolute -top-3 right-6 z-10">
+        <span className="px-3 py-1 bg-brass text-wood-dark rounded-full text-xs font-semibold shadow-md">
           Vintage Series
         </span>
       </div>
