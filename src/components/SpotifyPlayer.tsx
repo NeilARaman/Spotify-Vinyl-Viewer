@@ -579,10 +579,10 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
               spotifyService.logout();
               window.location.reload();
             }}
-            className="px-4 py-1.5 bg-brass/90 text-dark-brown rounded-md hover:bg-brass transition-all text-sm font-medium shadow-sm"
+            className="px-4 py-1.5 bg-brass/90 text-dark-brown rounded-md hover:bg-brass transition-all text-sm font-semibold shadow-sm"
             aria-label="Logout"
           >
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 text-dark-brown/90 drop-shadow-[0_0.5px_0.5px_rgba(0,0,0,0.2)]">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                 <polyline points="16 17 21 12 16 7"></polyline>
