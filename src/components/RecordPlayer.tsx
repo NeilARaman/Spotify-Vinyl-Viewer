@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX } from "lucide-react";
 import { spotifyService } from "../integrations/spotify";
 
@@ -13,6 +13,14 @@ interface RecordPlayerProps {
 const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) => {
   const [isControlDisabled, setIsControlDisabled] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Reset mute state when a new track starts playing
+  useEffect(() => {
+    if (isPlaying && isMuted) {
+      // If playback starts and we're muted, automatically unmute
+      handleMuteToggle(false);
+    }
+  }, [isPlaying, currentTrack]);
 
   const handlePlayPause = async () => {
     if (!spotifyService.isLoggedIn() || isControlDisabled) return;
@@ -54,6 +62,23 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
     }
   };
 
+  const handleMuteToggle = async (newMuteState: boolean) => {
+    if (!spotifyService.isLoggedIn() || isControlDisabled) return;
+    
+    setIsControlDisabled(true);
+    setIsMuted(newMuteState);
+    
+    try {
+      await spotifyService.toggleMute(newMuteState);
+    } catch (error) {
+      console.error('Failed to toggle mute state:', error);
+      // Revert the mute state if the operation failed
+      setIsMuted(!newMuteState);
+    } finally {
+      setTimeout(() => setIsControlDisabled(false), 300);
+    }
+  };
+
   // Determine if controls should appear disabled
   const buttonDisabledClass = isControlDisabled ? 'opacity-50 cursor-not-allowed' : '';
 
@@ -85,9 +110,10 @@ const RecordPlayer = ({ isPlaying = false, currentTrack }: RecordPlayerProps) =>
 
         {/* Volume control */}
         <button 
-          onClick={() => setIsMuted(!isMuted)}
-          className="absolute bottom-4 right-4 p-2 rounded-full bg-brass/10 hover:bg-brass/30 transition-colors"
+          onClick={() => handleMuteToggle(!isMuted)}
+          className={`absolute bottom-4 right-4 p-2 rounded-full ${isMuted ? 'bg-brass/30' : 'bg-brass/10'} hover:bg-brass/30 transition-colors ${buttonDisabledClass}`}
           title={isMuted ? "Unmute" : "Mute"}
+          disabled={isControlDisabled}
         >
           {isMuted ? (
             <VolumeX className="w-5 h-5 text-brass-dark" />

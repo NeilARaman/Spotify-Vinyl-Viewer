@@ -21,6 +21,7 @@ namespace Spotify {
     pause(): Promise<void>;
     nextTrack(): Promise<void>;
     previousTrack(): Promise<void>;
+    setVolume(volume: number): Promise<void>;
   }
 
   export interface ReadyEvent {
@@ -79,6 +80,7 @@ export class SpotifyService {
   private initializationPromise: Promise<boolean> | null = null;
   private connectionAttempts: number = 0;
   private readonly MAX_CONNECTION_ATTEMPTS = 3;
+  private previousVolume: number = 0.5; // Store previous volume when muting
 
   private constructor() {
     // Try to restore the access token from localStorage
@@ -374,6 +376,57 @@ export class SpotifyService {
       await this.player.previousTrack();
     } catch (err) {
       console.error('Error going to previous track:', err);
+    }
+  }
+
+  async setVolume(volumePercent: number): Promise<void> {
+    if (!this.player) return;
+    
+    try {
+      // Ensure volume is between 0 and 1
+      const volume = Math.max(0, Math.min(1, volumePercent));
+      await this.player.setVolume(volume);
+    } catch (err) {
+      console.error('Error setting volume:', err);
+    }
+  }
+  
+  async mute(): Promise<void> {
+    if (!this.player) return;
+    
+    try {
+      // Store current volume before muting
+      const state = await this.player.getCurrentState();
+      if (state) {
+        // Get current volume if available from SDK
+        // Note: getCurrentState doesn't provide volume info directly,
+        // so we'll use the stored value
+        this.previousVolume = 0.5; // Default if no previous volume
+      }
+      
+      // Set volume to 0
+      await this.player.setVolume(0);
+    } catch (err) {
+      console.error('Error muting player:', err);
+    }
+  }
+  
+  async unmute(): Promise<void> {
+    if (!this.player) return;
+    
+    try {
+      // Restore previous volume
+      await this.player.setVolume(this.previousVolume);
+    } catch (err) {
+      console.error('Error unmuting player:', err);
+    }
+  }
+  
+  async toggleMute(isMuted: boolean): Promise<void> {
+    if (isMuted) {
+      await this.mute();
+    } else {
+      await this.unmute();
     }
   }
 }
