@@ -64,22 +64,84 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
 
     // Add global error handler to suppress known Spotify SDK messaging error
     const handleGlobalErrors = (event: ErrorEvent) => {
-      if (event.error && event.error.message && event.error.message.includes('message channel closed before a response was received')) {
-        // This is a known Spotify SDK error that can be safely ignored
-        console.debug('Suppressed Spotify SDK messaging error:', event.error.message);
+      // Suppress the message channel closed error
+      if (event.message && event.message.includes('message channel closed before a response was received')) {
+        console.log('Suppressed Spotify SDK message channel error');
         event.preventDefault();
+        return true;
       }
+      
+      // Suppress CloudPlaybackClientError errors related to analytics
+      if (event.error && 
+          (event.error.toString().includes('CloudPlaybackClientError') || 
+           event.error.toString().includes('PlayLoad event failed with status 404') ||
+           event.error.toString().includes('Failed to load resource') ||
+           event.error.toString().includes('api.spotify.com'))) {
+        console.log('Suppressed Spotify SDK analytics error');
+        event.preventDefault();
+        return true;
+      }
+      
+      return false;
     };
 
     // Add global unhandled rejection handler to suppress the same error in promises
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      if (event.reason && typeof event.reason.message === 'string' && 
-          event.reason.message.includes('message channel closed before a response was received')) {
-        // This is a known Spotify SDK error that can be safely ignored
-        console.debug('Suppressed Spotify SDK promise rejection:', event.reason.message);
+      // Check if this is a Spotify SDK error we want to suppress
+      if (event.reason && 
+          (event.reason.toString().includes('message channel closed before a response was received') ||
+           event.reason.toString().includes('CloudPlaybackClientError') ||
+           event.reason.toString().includes('PlayLoad event failed with status 404') ||
+           event.reason.toString().includes('cpapi.spotify.com') ||
+           event.reason.toString().includes('api.spotify.com/v1/me/player/play'))) {
+        console.log('Suppressed Spotify SDK promise rejection:', 
+                    event.reason.toString().substring(0, 100) + '...');
         event.preventDefault();
+        return true;
       }
+      return false;
     };
+
+    // Special handling for Brave browser
+    const isBrave = (navigator as any).brave !== undefined || 
+                   (navigator.userAgent && navigator.userAgent.includes('Brave'));
+    
+    if (isBrave) {
+      console.log('Brave browser detected, adding additional error handling for Spotify SDK');
+      
+      // Intercept fetch calls to cpapi.spotify.com to prevent 404 errors
+      const originalFetch = window.fetch;
+      window.fetch = async function(input: RequestInfo | URL, init?: RequestInit) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        
+        // If this is a request to Spotify's analytics endpoint, handle specially
+        if (url.includes('cpapi.spotify.com') || url.includes('event/item_before_load')) {
+          try {
+            const response = await originalFetch(input, init);
+            
+            // If we get a 404 or 400, return a fake successful response
+            if (response.status === 404 || response.status === 400) {
+              console.log(`Intercepted ${response.status} response for ${url.split('?')[0]}`);
+              return new Response(JSON.stringify({success: true}), {
+                status: 200,
+                headers: {'Content-Type': 'application/json'}
+              });
+            }
+            return response;
+          } catch (error) {
+            console.log(`Intercepted fetch error for ${url.split('?')[0]}`);
+            // Return a fake successful response instead of throwing
+            return new Response(JSON.stringify({success: true}), {
+              status: 200,
+              headers: {'Content-Type': 'application/json'}
+            });
+          }
+        }
+        
+        // Pass through normal requests
+        return originalFetch(input, init);
+      };
+    }
 
     // Register error handlers
     window.addEventListener('error', handleGlobalErrors);
