@@ -81,6 +81,7 @@ export class SpotifyService {
   private initializationPromise: Promise<boolean> | null = null;
   private connectionAttempts: number = 0;
   private readonly MAX_CONNECTION_ATTEMPTS = 3;
+  private forceCleanLogin: boolean = false;
 
   private constructor() {
     // Restore tokens from local storage if available
@@ -176,9 +177,16 @@ export class SpotifyService {
     // Reset connection attempts on new login
     this.connectionAttempts = 0;
     
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
+    let authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
+    
+    // Add a cache-busting parameter if we want to force a clean login
+    if (this.forceCleanLogin) {
+      // Force Spotify to show the login dialog with show_dialog=true
+      authUrl += `&show_dialog=true&state=force_login_${Date.now()}`;
+      this.forceCleanLogin = false; // Reset the flag
+    }
     
     console.log('Redirecting to Spotify auth with URL:', authUrl);
     window.location.href = authUrl;
@@ -586,6 +594,24 @@ export class SpotifyService {
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('spotify_refresh_token');
     localStorage.removeItem('spotify_expires_at');
+    
+    // Add a specially crafted redirect to Spotify logout endpoint
+    // This will clear Spotify's auth cookies from the browser
+    const spotifyLogoutUrl = 'https://accounts.spotify.com/logout';
+    const logoutFrame = document.createElement('iframe');
+    logoutFrame.style.display = 'none';
+    logoutFrame.src = spotifyLogoutUrl;
+    document.body.appendChild(logoutFrame);
+    
+    // Remove the iframe after a short delay
+    setTimeout(() => {
+      if (logoutFrame.parentNode) {
+        logoutFrame.parentNode.removeChild(logoutFrame);
+      }
+    }, 1000);
+    
+    // Force a clean auth session in the next login by adding a timestamp parameter
+    this.forceCleanLogin = true;
   }
 }
 

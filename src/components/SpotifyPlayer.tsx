@@ -324,6 +324,24 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     }
   };
 
+  // Handle logout action
+  const handleLogout = useCallback(() => {
+    try {
+      setStatus('initializing');
+      spotifyService.logout();
+      
+      // Give the iframe time to clear cookies before reloading
+      setTimeout(() => {
+        setStatus('ready');
+        // Reload the page after logout to reset UI state
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      console.error('Logout error:', err);
+      setError('Error during logout. Please try again.');
+    }
+  }, []);
+
   // Play a playlist
   const playPlaylist = async (playlistId: string) => {
     if (status !== 'ready') {
@@ -538,10 +556,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
             </button>
             
         <button
-              onClick={() => {
-                spotifyService.logout();
-                window.location.reload();
-              }}
+              onClick={handleLogout}
               className="flex items-center space-x-1 bg-amber-800/30 text-amber-400 hover:text-amber-300 py-1.5 px-3 rounded-md font-medium"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -592,10 +607,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
         {/* Logout button */}
         {spotifyService.isLoggedIn() && (
           <button
-            onClick={() => {
-              spotifyService.logout();
-              window.location.reload();
-            }}
+            onClick={handleLogout}
             className="flex items-center space-x-1 bg-amber-800/30 text-amber-400 hover:text-amber-300 py-1.5 px-3 rounded-md font-medium"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
