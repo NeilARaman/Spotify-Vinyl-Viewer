@@ -177,35 +177,20 @@ export class SpotifyService {
     // Reset connection attempts on new login
     this.connectionAttempts = 0;
     
-    // Check if we're coming from a logout
-    const justLoggedOut = this.isReturningFromLogout();
-    if (justLoggedOut) {
-      console.log('Logging in after logout, clearing flag and forcing dialog');
-      // Clear the flag
-      localStorage.removeItem('spotify_just_logged_out');
-    }
-    
     // Base authorization URL
     let authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
     
-    // Always show the dialog when we've just logged out or forceCleanLogin is set
-    if (justLoggedOut || this.forceCleanLogin) {
-      // According to Spotify docs, this forces the login screen to appear
+    // Check if we need to force login dialog
+    const forceLogin = localStorage.getItem('spotify_force_login') === 'true';
+    
+    if (forceLogin) {
+      // Force Spotify to show the login dialog
       authUrl += `&show_dialog=true`;
       
-      // Add both prompt=login and code_challenge parameters to force a fresh login
-      // The prompt=login parameter tells Spotify to prompt the user to log in again
-      authUrl += `&prompt=login`;
-      
-      // Add a timestamp to prevent caching
-      authUrl += `&state=force_login_${Date.now()}`;
-      this.forceCleanLogin = false;
-      
-      // This makes the challenge a bit different each time, forcing a fresh auth
-      const challenge = `challenge_${Math.random().toString(36).substring(2, 15)}`;
-      authUrl += `&code_challenge=${challenge}`;
+      // Clear the flag
+      localStorage.removeItem('spotify_force_login');
     }
     
     console.log('Redirecting to Spotify auth with URL:', authUrl);
@@ -638,11 +623,11 @@ export class SpotifyService {
   // Add the logout method to the SpotifyService class
   logout(): void {
     console.log('Logging out of Spotify');
+    
+    // Clear all tokens and state
     this.clearTokens();
     
-    // Try to clear cookies directly first
-    this.clearSpotifyCookies();
-    
+    // Clear player state
     if (this.player) {
       try {
         this.player.disconnect();
@@ -651,33 +636,13 @@ export class SpotifyService {
       }
       this.player = null;
     }
+    
     this.deviceId = null;
     this.initializationPromise = null;
     this.connectionAttempts = 0;
     
-    // Clear all localStorage items for Spotify specifically
-    localStorage.removeItem('spotify_access_token');
-    localStorage.removeItem('spotify_refresh_token');
-    localStorage.removeItem('spotify_expires_at');
-    localStorage.removeItem('spotify_token_expiration');
-    
-    // Force a clean login on next attempt
-    this.forceCleanLogin = true;
-    
-    // Get the current URL to return to after logout
-    const homeUrl = encodeURIComponent(window.location.origin);
-    
-    // Set up Spotify's logout URL
-    const spotifyLogoutUrl = `https://accounts.spotify.com/logout`;
-    
-    // Store a flag in localStorage to indicate we're coming from a logout
-    localStorage.setItem('spotify_just_logged_out', 'true');
-    
-    // Log the logout URL for debugging
-    console.log(`Redirecting to Spotify logout: ${spotifyLogoutUrl}`);
-    
-    // Redirect to Spotify logout page
-    window.location.href = spotifyLogoutUrl;
+    // Set flag to force show_dialog on next login
+    localStorage.setItem('spotify_force_login', 'true');
   }
 
   // Method to check if the page was just reloaded after a logout

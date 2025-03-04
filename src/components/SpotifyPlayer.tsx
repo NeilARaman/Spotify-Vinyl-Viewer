@@ -317,14 +317,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Handle login action
   const handleLogin = () => {
     try {
-      // If the page just loaded and we're coming from a logout, check for the flag
-      const justLoggedOut = spotifyService.isReturningFromLogout();
-      
-      if (justLoggedOut) {
-        console.log('Detected login after logout, ensuring fresh login session');
-        // The service will handle showing the dialog because of the flag
-      }
-      
+      // The login method in spotifyService will handle checking for the force_login flag
       spotifyService.login();
     } catch (err) {
       console.error('Login error:', err);
@@ -336,9 +329,10 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   const handleLogout = useCallback(() => {
     try {
       console.log('Logging out of Spotify...');
-      // Simply call logout which now handles the redirect
       spotifyService.logout();
-      // No need to call window.location.reload() as we now redirect to Spotify's logout page
+      
+      // Reload the page to reset the UI state
+      window.location.reload();
     } catch (err) {
       console.error('Logout error:', err);
       setError('Error during logout. Please try again.');
