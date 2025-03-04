@@ -317,7 +317,15 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Handle login action
   const handleLogin = () => {
     try {
-    spotifyService.login();
+      // If the page just loaded and we're coming from a logout, check for the flag
+      const justLoggedOut = spotifyService.isReturningFromLogout();
+      
+      if (justLoggedOut) {
+        console.log('Detected login after logout, ensuring fresh login session');
+        // The service will handle showing the dialog because of the flag
+      }
+      
+      spotifyService.login();
     } catch (err) {
       console.error('Login error:', err);
       setError('Could not connect to Spotify. Please try again.');
@@ -327,15 +335,10 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Handle logout action
   const handleLogout = useCallback(() => {
     try {
-      setStatus('initializing');
+      console.log('Logging out of Spotify...');
+      // Simply call logout which now handles the redirect
       spotifyService.logout();
-      
-      // Give the iframe time to clear cookies before reloading
-      setTimeout(() => {
-        setStatus('ready');
-        // Reload the page after logout to reset UI state
-        window.location.reload();
-      }, 1500);
+      // No need to call window.location.reload() as we now redirect to Spotify's logout page
     } catch (err) {
       console.error('Logout error:', err);
       setError('Error during logout. Please try again.');

@@ -177,15 +177,35 @@ export class SpotifyService {
     // Reset connection attempts on new login
     this.connectionAttempts = 0;
     
+    // Check if we're coming from a logout
+    const justLoggedOut = this.isReturningFromLogout();
+    if (justLoggedOut) {
+      console.log('Logging in after logout, clearing flag and forcing dialog');
+      // Clear the flag
+      localStorage.removeItem('spotify_just_logged_out');
+    }
+    
+    // Base authorization URL
     let authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
     
-    // Add a cache-busting parameter if we want to force a clean login
-    if (this.forceCleanLogin) {
-      // Force Spotify to show the login dialog with show_dialog=true
-      authUrl += `&show_dialog=true&state=force_login_${Date.now()}`;
-      this.forceCleanLogin = false; // Reset the flag
+    // Always show the dialog when we've just logged out or forceCleanLogin is set
+    if (justLoggedOut || this.forceCleanLogin) {
+      // According to Spotify docs, this forces the login screen to appear
+      authUrl += `&show_dialog=true`;
+      
+      // Add both prompt=login and code_challenge parameters to force a fresh login
+      // The prompt=login parameter tells Spotify to prompt the user to log in again
+      authUrl += `&prompt=login`;
+      
+      // Add a timestamp to prevent caching
+      authUrl += `&state=force_login_${Date.now()}`;
+      this.forceCleanLogin = false;
+      
+      // This makes the challenge a bit different each time, forcing a fresh auth
+      const challenge = `challenge_${Math.random().toString(36).substring(2, 15)}`;
+      authUrl += `&code_challenge=${challenge}`;
     }
     
     console.log('Redirecting to Spotify auth with URL:', authUrl);
@@ -198,6 +218,12 @@ export class SpotifyService {
     const params = new URLSearchParams(hash);
     this.accessToken = params.get('access_token');
     const expiresIn = params.get('expires_in');
+    
+    // Check if we're coming from a logout (this could be redundant, but better safe than sorry)
+    if (this.isReturningFromLogout()) {
+      console.log('Detected callback after logout, clearing logged out state');
+      localStorage.removeItem('spotify_just_logged_out');
+    }
     
     // Debug params
     console.log('Access token present:', !!this.accessToken);
@@ -576,10 +602,47 @@ export class SpotifyService {
     }
   }
 
+  // Add a dedicated method to clear Spotify cookies
+  private clearSpotifyCookies() {
+    // Try to clear all cookies from spotify.com domain
+    const cookies = document.cookie.split(';');
+    
+    // Clear cookies by setting their expiration to a past date
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i];
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+      
+      // Try to identify Spotify-related cookies and clear them
+      if (name.toLowerCase().includes('spotify') || 
+          name.toLowerCase().includes('sp_') || 
+          name.toLowerCase().includes('_sp')) {
+        console.log(`Clearing Spotify cookie: ${name}`);
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.spotify.com`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=accounts.spotify.com`;
+      }
+    }
+    
+    // Also clear all localStorage data related to Spotify
+    Object.keys(localStorage).forEach(key => {
+      if (key.toLowerCase().includes('spotify')) {
+        console.log(`Clearing localStorage item: ${key}`);
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Set a flag to indicate we've cleared cookies
+    localStorage.setItem('spotify_cookies_cleared', 'true');
+  }
+
   // Add the logout method to the SpotifyService class
   logout(): void {
     console.log('Logging out of Spotify');
     this.clearTokens();
+    
+    // Try to clear cookies directly first
+    this.clearSpotifyCookies();
+    
     if (this.player) {
       try {
         this.player.disconnect();
@@ -591,27 +654,35 @@ export class SpotifyService {
     this.deviceId = null;
     this.initializationPromise = null;
     this.connectionAttempts = 0;
+    
+    // Clear all localStorage items for Spotify specifically
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('spotify_refresh_token');
     localStorage.removeItem('spotify_expires_at');
+    localStorage.removeItem('spotify_token_expiration');
     
-    // Add a specially crafted redirect to Spotify logout endpoint
-    // This will clear Spotify's auth cookies from the browser
-    const spotifyLogoutUrl = 'https://accounts.spotify.com/logout';
-    const logoutFrame = document.createElement('iframe');
-    logoutFrame.style.display = 'none';
-    logoutFrame.src = spotifyLogoutUrl;
-    document.body.appendChild(logoutFrame);
-    
-    // Remove the iframe after a short delay
-    setTimeout(() => {
-      if (logoutFrame.parentNode) {
-        logoutFrame.parentNode.removeChild(logoutFrame);
-      }
-    }, 1000);
-    
-    // Force a clean auth session in the next login by adding a timestamp parameter
+    // Force a clean login on next attempt
     this.forceCleanLogin = true;
+    
+    // Get the current URL to return to after logout
+    const homeUrl = encodeURIComponent(window.location.origin);
+    
+    // Set up Spotify's logout URL
+    const spotifyLogoutUrl = `https://accounts.spotify.com/logout`;
+    
+    // Store a flag in localStorage to indicate we're coming from a logout
+    localStorage.setItem('spotify_just_logged_out', 'true');
+    
+    // Log the logout URL for debugging
+    console.log(`Redirecting to Spotify logout: ${spotifyLogoutUrl}`);
+    
+    // Redirect to Spotify logout page
+    window.location.href = spotifyLogoutUrl;
+  }
+
+  // Method to check if the page was just reloaded after a logout
+  isReturningFromLogout(): boolean {
+    return localStorage.getItem('spotify_just_logged_out') === 'true';
   }
 }
 
