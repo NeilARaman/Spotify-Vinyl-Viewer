@@ -13,12 +13,14 @@ const queryClient = new QueryClient();
 const SpotifyCallback = () => {
   console.log('Rendering SpotifyCallback component');
   console.log('Current URL:', window.location.href);
-  console.log('Hash present:', !!window.location.hash);
   
-  if (!window.location.hash) {
-    console.log('No hash found, redirecting to home');
+  // Check for code parameter in search (query parameters) instead of hash
+  if (!window.location.search || !window.location.search.includes('code=')) {
+    console.log('No authorization code found, redirecting to home');
     return <Navigate to="/" replace />;
   }
+  
+  console.log('Authorization code found, processing login');
   
   return (
     <div>
