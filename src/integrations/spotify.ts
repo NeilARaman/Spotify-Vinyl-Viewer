@@ -223,6 +223,7 @@ export class SpotifyService {
     // Generate and store code verifier
     const codeVerifier = generateCodeVerifier(128);
     localStorage.setItem('spotify_code_verifier', codeVerifier);
+    console.log('Generated and stored code verifier:', codeVerifier.substring(0, 5) + '...');
     
     // Generate code challenge
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -252,6 +253,16 @@ export class SpotifyService {
     
     authUrl.search = params.toString();
     console.log('Redirecting to Spotify auth with URL:', authUrl.toString());
+    
+    // Verify code verifier is stored correctly before redirecting
+    const storedVerifier = localStorage.getItem('spotify_code_verifier');
+    if (!storedVerifier) {
+      console.error('Failed to store code verifier in localStorage!');
+      // Try again with session storage as fallback
+      sessionStorage.setItem('spotify_code_verifier', codeVerifier);
+      console.log('Stored code verifier in sessionStorage as fallback');
+    }
+    
     window.location.href = authUrl.toString();
   }
 
@@ -261,7 +272,16 @@ export class SpotifyService {
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     const storedState = localStorage.getItem('spotify_auth_state');
-    const codeVerifier = localStorage.getItem('spotify_code_verifier');
+    
+    // Check localStorage and sessionStorage for code verifier
+    let codeVerifier = localStorage.getItem('spotify_code_verifier');
+    if (!codeVerifier) {
+      // Try session storage as backup
+      codeVerifier = sessionStorage.getItem('spotify_code_verifier');
+      console.log('Using code verifier from sessionStorage');
+    }
+    
+    console.log('Retrieved code verifier:', codeVerifier ? (codeVerifier.substring(0, 5) + '...') : 'null');
     
     // Check if state matches to prevent CSRF attacks
     if (!state || state !== storedState) {
@@ -278,6 +298,7 @@ export class SpotifyService {
     // Exchange the code for an access token and refresh token
     if (code && codeVerifier) {
       try {
+        console.log('Exchanging code for token with verifier:', codeVerifier.substring(0, 5) + '...');
         const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
           method: 'POST',
           headers: {
@@ -288,7 +309,7 @@ export class SpotifyService {
             grant_type: 'authorization_code',
             code,
             redirect_uri: REDIRECT_URI,
-            code_verifier
+            code_verifier: codeVerifier
           }).toString()
         });
         

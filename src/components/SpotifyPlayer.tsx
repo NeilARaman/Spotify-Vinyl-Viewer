@@ -36,6 +36,13 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       if (window.location.search && window.location.search.includes('code=')) {
         setStatus('authenticating');
         try {
+          // Debug: Check if code verifier exists
+          const codeVerifier = localStorage.getItem('spotify_code_verifier');
+          console.log('Code verifier exists before callback?', !!codeVerifier);
+          if (!codeVerifier) {
+            console.log('Missing code verifier! This may be causing the authentication problem.');
+          }
+          
           const success = await spotifyService.handleCallback();
           if (success) {
             // Redirect to home page after successful login
