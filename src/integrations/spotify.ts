@@ -2,7 +2,7 @@
 declare global {
   interface Window {
     Spotify: {
-      Player: new (options: any) => Spotify.Player;
+      Player: new (options: PlayerInit) => Spotify.Player;
     };
     onSpotifyWebPlaybackSDKReady: () => void;
   }
@@ -47,6 +47,18 @@ namespace Spotify {
   }
 }
 
+// Define the PlayerInit interface to match what's used by the Spotify SDK
+interface PlayerInit {
+  name: string;
+  getOAuthToken: (cb: (token: string) => void) => void;
+  volume?: number;
+  enableMediaSession?: boolean;
+  audioQuality?: {
+    robustness?: string;
+    preferredAudioCodecs?: string[];
+  };
+}
+
 // Hardcoded values that are known to work
 const SPOTIFY_CLIENT_ID = 'd0469a1618e4427b87de47779818f74c';
 // For production, use the hardcoded URL, for development use the current origin
@@ -69,11 +81,40 @@ const SCOPES = [
 // Console log the actual redirect URL being used - can be removed after debugging
 console.log('Using Spotify redirect URL:', REDIRECT_URI);
 
-console.log('Spotify Auth URL:', `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES.join(' '))}`);
+// Helper function to generate random string for state
+function generateRandomString(length: number): string {
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const values = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(values)
+    .map(x => possible[x % possible.length])
+    .join('');
+}
+
+// Helper function to generate code verifier
+function generateCodeVerifier(length: number): string {
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const values = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(values)
+    .map(x => possible[x % possible.length])
+    .join('');
+}
+
+// Helper function to generate code challenge from verifier
+async function generateCodeChallenge(codeVerifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(codeVerifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
 
 export class SpotifyService {
   private static instance: SpotifyService;
   private accessToken: string | null = null;
+  private refreshToken: string | null = null;
   private tokenExpiration: number | null = null;
   private player: Spotify.Player | null = null;
   private deviceId: string | null = null;
@@ -87,10 +128,12 @@ export class SpotifyService {
     // Restore tokens from local storage if available
     const storedToken = localStorage.getItem('spotify_access_token');
     const storedExpiration = localStorage.getItem('spotify_token_expiration');
+    const storedRefreshToken = localStorage.getItem('spotify_refresh_token');
     
     if (storedToken && storedExpiration) {
       this.accessToken = storedToken;
       this.tokenExpiration = parseInt(storedExpiration, 10);
+      this.refreshToken = storedRefreshToken;
     }
     
     // Override fetch to intercept and handle cpapi.spotify.com requests
@@ -173,64 +216,123 @@ export class SpotifyService {
     return SpotifyService.instance;
   }
 
-  login() {
+  async login() {
     // Reset connection attempts on new login
     this.connectionAttempts = 0;
     
-    // Base authorization URL
-    let authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(
-      REDIRECT_URI
-    )}&scope=${encodeURIComponent(SCOPES.join(' '))}`;
+    // Generate and store code verifier
+    const codeVerifier = generateCodeVerifier(128);
+    localStorage.setItem('spotify_code_verifier', codeVerifier);
+    
+    // Generate code challenge
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    // Generate and store state for CSRF protection
+    const state = generateRandomString(16);
+    localStorage.setItem('spotify_auth_state', state);
+    
+    // Base authorization URL - Using Authorization Code with PKCE flow instead of Implicit Grant
+    let authUrl = new URL('https://accounts.spotify.com/authorize');
+    const params = new URLSearchParams({
+      client_id: SPOTIFY_CLIENT_ID,
+      response_type: 'code', // Changed from 'token' to 'code'
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: 'S256',
+      code_challenge: codeChallenge,
+      state: state,
+      scope: SCOPES.join(' ')
+    });
     
     // Check if we need to force login dialog
     const forceLogin = localStorage.getItem('spotify_force_login') === 'true';
-    
     if (forceLogin) {
-      // Force Spotify to show the login dialog
-      authUrl += `&show_dialog=true`;
-      
-      // Clear the flag
+      params.append('show_dialog', 'true');
       localStorage.removeItem('spotify_force_login');
     }
     
-    console.log('Redirecting to Spotify auth with URL:', authUrl);
-    window.location.href = authUrl;
+    authUrl.search = params.toString();
+    console.log('Redirecting to Spotify auth with URL:', authUrl.toString());
+    window.location.href = authUrl.toString();
   }
 
-  handleCallback() {
-    console.log('Handling callback with hash:', window.location.hash);
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    this.accessToken = params.get('access_token');
-    const expiresIn = params.get('expires_in');
+  async handleCallback() {
+    console.log('Handling callback with search params:', window.location.search);
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const storedState = localStorage.getItem('spotify_auth_state');
+    const codeVerifier = localStorage.getItem('spotify_code_verifier');
     
-    // Check if we're coming from a logout (this could be redundant, but better safe than sorry)
+    // Check if state matches to prevent CSRF attacks
+    if (!state || state !== storedState) {
+      console.error('State mismatch in callback');
+      return false;
+    }
+    
+    // Check if we're coming from a logout
     if (this.isReturningFromLogout()) {
       console.log('Detected callback after logout, clearing logged out state');
       localStorage.removeItem('spotify_just_logged_out');
     }
     
-    // Debug params
-    console.log('Access token present:', !!this.accessToken);
-    console.log('Expires in:', expiresIn);
-    
-    if (this.accessToken && expiresIn) {
-      // Calculate expiration time (in milliseconds)
-      const expirationTime = Date.now() + parseInt(expiresIn, 10) * 1000;
-      this.tokenExpiration = expirationTime;
-      
-      // Store in localStorage
-      localStorage.setItem('spotify_access_token', this.accessToken);
-      localStorage.setItem('spotify_token_expiration', expirationTime.toString());
-      return true;
+    // Exchange the code for an access token and refresh token
+    if (code && codeVerifier) {
+      try {
+        const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            client_id: SPOTIFY_CLIENT_ID,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: REDIRECT_URI,
+            code_verifier
+          }).toString()
+        });
+        
+        if (!tokenResponse.ok) {
+          throw new Error(`Token exchange failed: ${tokenResponse.status}`);
+        }
+        
+        const tokenData = await tokenResponse.json();
+        this.accessToken = tokenData.access_token;
+        this.refreshToken = tokenData.refresh_token;
+        
+        // Calculate expiration time (in milliseconds)
+        const expirationTime = Date.now() + tokenData.expires_in * 1000;
+        this.tokenExpiration = expirationTime;
+        
+        // Store in localStorage
+        localStorage.setItem('spotify_access_token', this.accessToken);
+        localStorage.setItem('spotify_token_expiration', expirationTime.toString());
+        if (this.refreshToken) {
+          localStorage.setItem('spotify_refresh_token', this.refreshToken);
+        }
+        
+        // Clean up code verifier and state
+        localStorage.removeItem('spotify_code_verifier');
+        localStorage.removeItem('spotify_auth_state');
+        
+        return true;
+      } catch (error) {
+        console.error('Error exchanging code for token:', error);
+        return false;
+      }
     }
+    
     return false;
   }
 
   private clearTokens() {
     localStorage.removeItem('spotify_access_token');
     localStorage.removeItem('spotify_token_expiration');
+    localStorage.removeItem('spotify_refresh_token');
+    localStorage.removeItem('spotify_code_verifier');
+    localStorage.removeItem('spotify_auth_state');
     this.accessToken = null;
+    this.refreshToken = null;
     this.tokenExpiration = null;
   }
 
@@ -238,6 +340,54 @@ export class SpotifyService {
     if (!this.tokenExpiration) return true;
     // Consider token expired 5 minutes before actual expiration
     return Date.now() > this.tokenExpiration - 300000;
+  }
+  
+  isLoggedIn(): boolean {
+    return !!this.accessToken && !this.isTokenExpired();
+  }
+
+  async refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshToken) return false;
+    
+    try {
+      const response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: this.refreshToken,
+          client_id: SPOTIFY_CLIENT_ID
+        }).toString()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Token refresh failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      this.accessToken = data.access_token;
+      
+      // Refresh token might be returned, update if so
+      if (data.refresh_token) {
+        this.refreshToken = data.refresh_token;
+        localStorage.setItem('spotify_refresh_token', this.refreshToken);
+      }
+      
+      // Calculate expiration time
+      const expirationTime = Date.now() + data.expires_in * 1000;
+      this.tokenExpiration = expirationTime;
+      
+      // Update local storage
+      localStorage.setItem('spotify_access_token', this.accessToken);
+      localStorage.setItem('spotify_token_expiration', expirationTime.toString());
+      
+      return true;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      return false;
+    }
   }
 
   async initializePlayer(onStateChange?: (state: Spotify.PlaybackState | null) => void): Promise<boolean> {
@@ -248,11 +398,26 @@ export class SpotifyService {
     
     // Check if token is expired before initializing player
     if (this.isTokenExpired()) {
-      console.warn('Spotify access token is expired. Refreshing...');
-      // Force a new login if token is expired
-      this.clearTokens();
-      this.login();
-      return false;
+      console.warn('Spotify access token is expired.');
+      
+      // Try to refresh the token if we have a refresh token
+      if (this.refreshToken) {
+        console.log('Attempting to refresh access token...');
+        const refreshed = await this.refreshAccessToken();
+        if (!refreshed) {
+          console.warn('Token refresh failed. Redirecting to login...');
+          this.clearTokens();
+          await this.login();
+          return false;
+        }
+        console.log('Access token refreshed successfully.');
+      } else {
+        // Force a new login if token is expired and no refresh token
+        console.warn('No refresh token available. Redirecting to login...');
+        this.clearTokens();
+        await this.login();
+        return false;
+      }
     }
     
     // Increment connection attempts
@@ -366,7 +531,9 @@ export class SpotifyService {
         })
         .catch(error => {
           console.error('Error connecting to Spotify:', error);
-          if (error && error.message && (error.message.includes('404') || error.message.includes('Not Found'))) {
+          if (error && typeof error === 'object' && 'message' in error && 
+              typeof error.message === 'string' && 
+              (error.message.includes('404') || error.message.includes('Not Found'))) {
             console.error('Spotify API endpoint not found. This may be a temporary Spotify service issue.');
           }
           clearTimeout(timeoutId);
@@ -536,10 +703,6 @@ export class SpotifyService {
     }
   }
 
-  isLoggedIn(): boolean {
-    return !!this.accessToken && !this.isTokenExpired();
-  }
-
   async togglePlayback(): Promise<void> {
     if (!this.player) return;
     
@@ -643,6 +806,9 @@ export class SpotifyService {
     
     // Set flag to force show_dialog on next login
     localStorage.setItem('spotify_force_login', 'true');
+    
+    // Set flag for callback to detect logout
+    localStorage.setItem('spotify_just_logged_out', 'true');
   }
 
   // Method to check if the page was just reloaded after a logout
@@ -651,4 +817,4 @@ export class SpotifyService {
   }
 }
 
-export const spotifyService = SpotifyService.getInstance(); 
+export const spotifyService = SpotifyService.getInstance();

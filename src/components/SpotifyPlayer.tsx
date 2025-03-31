@@ -32,17 +32,17 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
   // Check for authentication on component mount
   useEffect(() => {
     const checkAuth = async () => {
-    // Handle the callback from Spotify auth
-    if (window.location.hash) {
+      // Handle the callback from Spotify auth - now using query params instead of hash
+      if (window.location.search && window.location.search.includes('code=')) {
         setStatus('authenticating');
-      try {
-        const success = spotifyService.handleCallback();
-        if (success) {
+        try {
+          const success = await spotifyService.handleCallback();
+          if (success) {
             // Redirect to home page after successful login
-          navigate('/', { replace: true });
+            navigate('/', { replace: true });
             // Skip to connecting since we have a token
             await initializePlayer();
-        } else {
+          } else {
             setError('Unable to connect to Spotify. Please try again.');
             setStatus('error');
           }
