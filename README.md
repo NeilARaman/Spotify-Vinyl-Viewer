@@ -2,7 +2,7 @@
 
 ## Overview
 
-I really like Spotify but wanted something more similar to that of a 90s-ish vinyl record and wanted it fast, so I made this using Vercel, Loveable, Cursor, and Supabase in 2ish hours.
+I really like Spotify but wanted something more similar to that of a 90s-ish vinyl record and wanted it fast, so I made this using Loveable and Cursor, and deployed on Vercel in 2ish hours.
 
 ## Project URL
 
