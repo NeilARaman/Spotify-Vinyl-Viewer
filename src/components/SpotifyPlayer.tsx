@@ -625,7 +625,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
       </div>
       
       {noPlaylists && (
-        <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6 text-center mb-6">
+        <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6 text-center mb-6 min-h-[120px]">
           <p className="text-brass-dark">
             No playlists found in your Spotify account. Create some playlists and they'll appear here.
           </p>

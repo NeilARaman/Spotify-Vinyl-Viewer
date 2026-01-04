@@ -72,9 +72,9 @@ const RecordPlayer = ({ isPlaying = false, currentTrack = null }: RecordPlayerPr
       role="region"
       aria-label="Record Player Controls"
     >
-      {/* Vintage Series Badge - repositioned to be on top of the box rather than overlapping */}
-      <div className="absolute -top-3 right-6 z-10">
-        <span className="px-3 py-1 bg-brass text-wood-dark rounded-full text-xs font-semibold shadow-md">
+      {/* Vintage Series Badge - fixed dimensions to prevent layout shift */}
+      <div className="absolute -top-3 right-6 z-10 w-[98px] h-[22px]">
+        <span className="px-3 py-1 bg-brass text-wood-dark rounded-full text-xs font-semibold shadow-md whitespace-nowrap">
           Vintage Series
         </span>
       </div>

@@ -14,7 +14,7 @@ const Index = () => {
         </h1>
         <div className="grid grid-cols-1 gap-8">
           <RecordPlayer isPlaying={isPlaying} currentTrack={currentTrack} />
-          <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6">
+          <div className="bg-wood-light/10 backdrop-blur-sm rounded-lg p-6 min-h-[200px]">
             <SpotifyPlayer 
               onPlaybackStateChange={setIsPlaying}
               onTrackChange={(name, artist) => setCurrentTrack({ name, artist })}
