@@ -54,7 +54,7 @@
         "tailwind-merge": "^2.5.2",
         "tailwindcss-animate": "^1.0.7",
         "vaul": "^0.9.3",
-        "zod": "^3.25.76",
+        "zod": "^3.25.76"
       },
       "devDependencies": {
         "@eslint/js": "^9.9.0",
@@ -73,12 +73,12 @@
         "tailwindcss": "^3.4.11",
         "typescript": "^5.5.3",
         "typescript-eslint": "^8.0.1",
-        "vite": "^5.4.1",
-      },
-    },
+        "vite": "^5.4.1"
+      }
+    }
   },
   "overrides": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.25.0"
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -983,6 +983,6 @@
 
     "tinyglobby/picomatch": ["picomatch@4.0.3", "", {}, "sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q=="],
 
-    "@typescript-eslint/typescript-estree/minimatch/brace-expansion": ["brace-expansion@2.0.2", "", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="],
+    "@typescript-eslint/typescript-estree/minimatch/brace-expansion": ["brace-expansion@2.0.2", "", { "dependencies": { "balanced-match": "^1.0.0" } }, "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ=="]
   }
 }
