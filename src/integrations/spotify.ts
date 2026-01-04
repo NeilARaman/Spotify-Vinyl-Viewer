@@ -1,70 +1,16 @@
-// Add missing type definitions for Spotify SDK
-declare global {
-  interface Window {
-    Spotify: {
-      Player: new (options: PlayerInit) => Spotify.Player;
-    };
-    onSpotifyWebPlaybackSDKReady: () => void;
+// Spotify SDK type definitions are in src/types/spotify.d.ts
+
+// Load from environment variables
+const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || `${window.location.origin}/callback`;
+
+function requireSpotifyClientId(): string {
+  if (!SPOTIFY_CLIENT_ID) {
+    throw new Error('Missing VITE_SPOTIFY_CLIENT_ID environment variable');
   }
+
+  return SPOTIFY_CLIENT_ID;
 }
-
-namespace Spotify {
-  export interface Player {
-    connect(): Promise<boolean>;
-    disconnect(): void;
-    addListener(event: 'ready', callback: (event: ReadyEvent) => void): void;
-    addListener(event: 'not_ready', callback: (event: NotReadyEvent) => void): void;
-    addListener(event: 'player_state_changed', callback: (state: PlaybackState | null) => void): void;
-    addListener(event: 'initialization_error' | 'authentication_error' | 'account_error', callback: (event: ErrorEvent) => void): void;
-    getCurrentState(): Promise<PlaybackState | null>;
-    resume(): Promise<void>;
-    pause(): Promise<void>;
-    nextTrack(): Promise<void>;
-    previousTrack(): Promise<void>;
-    setVolume(volume: number): Promise<void>;
-  }
-
-  export interface ReadyEvent {
-    device_id: string;
-  }
-
-  export interface NotReadyEvent {
-    device_id: string;
-  }
-
-  export interface ErrorEvent {
-    message: string;
-  }
-
-  export interface PlaybackState {
-    paused: boolean;
-    track_window: {
-      current_track: {
-        name: string;
-        artists: Array<{ name: string }>;
-      };
-    };
-  }
-}
-
-// Define the PlayerInit interface to match what's used by the Spotify SDK
-interface PlayerInit {
-  name: string;
-  getOAuthToken: (cb: (token: string) => void) => void;
-  volume?: number;
-  enableMediaSession?: boolean;
-  audioQuality?: {
-    robustness?: string;
-    preferredAudioCodecs?: string[];
-  };
-}
-
-// Hardcoded values that are known to work
-const SPOTIFY_CLIENT_ID = 'd0469a1618e4427b87de47779818f74c';
-// For production, use the hardcoded URL, for development use the current origin
-const REDIRECT_URI = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? `${window.location.origin}/callback`
-  : 'https://spotify-vinyl-project.vercel.app/callback';
 
 const SCOPES = [
   'user-read-private',
@@ -121,8 +67,6 @@ export class SpotifyService {
   private stateCallback: ((state: Spotify.PlaybackState | null) => void) | null = null;
   private initializationPromise: Promise<boolean> | null = null;
   private connectionAttempts: number = 0;
-  private readonly MAX_CONNECTION_ATTEMPTS = 3;
-  private forceCleanLogin: boolean = false;
 
   private constructor() {
     // Restore tokens from local storage if available
@@ -217,6 +161,8 @@ export class SpotifyService {
   }
 
   async login() {
+    const clientId = requireSpotifyClientId();
+
     // Reset connection attempts on new login
     this.connectionAttempts = 0;
     
@@ -235,7 +181,7 @@ export class SpotifyService {
     // Base authorization URL - Using Authorization Code with PKCE flow instead of Implicit Grant
     let authUrl = new URL('https://accounts.spotify.com/authorize');
     const params = new URLSearchParams({
-      client_id: SPOTIFY_CLIENT_ID,
+      client_id: clientId,
       response_type: 'code', // Changed from 'token' to 'code'
       redirect_uri: REDIRECT_URI,
       code_challenge_method: 'S256',
@@ -298,6 +244,7 @@ export class SpotifyService {
     // Exchange the code for an access token and refresh token
     if (code && codeVerifier) {
       try {
+        const clientId = requireSpotifyClientId();
         console.log('Exchanging code for token with verifier:', codeVerifier.substring(0, 5) + '...');
         const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
           method: 'POST',
@@ -305,7 +252,7 @@ export class SpotifyService {
             'Content-Type': 'application/x-www-form-urlencoded'
           },
           body: new URLSearchParams({
-            client_id: SPOTIFY_CLIENT_ID,
+            client_id: clientId,
             grant_type: 'authorization_code',
             code,
             redirect_uri: REDIRECT_URI,
@@ -325,11 +272,17 @@ export class SpotifyService {
         const expirationTime = Date.now() + tokenData.expires_in * 1000;
         this.tokenExpiration = expirationTime;
         
-        // Store in localStorage
-        localStorage.setItem('spotify_access_token', this.accessToken);
+        // Store in localStorage, handling possible nulls safely
+        if (this.accessToken) {
+          localStorage.setItem('spotify_access_token', this.accessToken);
+        } else {
+          localStorage.removeItem('spotify_access_token');
+        }
         localStorage.setItem('spotify_token_expiration', expirationTime.toString());
         if (this.refreshToken) {
           localStorage.setItem('spotify_refresh_token', this.refreshToken);
+        } else {
+          localStorage.removeItem('spotify_refresh_token');
         }
         
         // Clean up code verifier and state
@@ -371,6 +324,7 @@ export class SpotifyService {
     if (!this.refreshToken) return false;
     
     try {
+      const clientId = requireSpotifyClientId();
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: {
@@ -379,7 +333,7 @@ export class SpotifyService {
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: this.refreshToken,
-          client_id: SPOTIFY_CLIENT_ID
+          client_id: clientId
         }).toString()
       });
       
@@ -393,17 +347,25 @@ export class SpotifyService {
       // Refresh token might be returned, update if so
       if (data.refresh_token) {
         this.refreshToken = data.refresh_token;
-        localStorage.setItem('spotify_refresh_token', this.refreshToken);
+        if (this.refreshToken !== null) {
+          localStorage.setItem('spotify_refresh_token', this.refreshToken);
+        } else {
+          localStorage.removeItem('spotify_refresh_token');
+        }
       }
       
       // Calculate expiration time
       const expirationTime = Date.now() + data.expires_in * 1000;
       this.tokenExpiration = expirationTime;
-      
+
       // Update local storage
-      localStorage.setItem('spotify_access_token', this.accessToken);
+      if (this.accessToken !== null) {
+        localStorage.setItem('spotify_access_token', this.accessToken);
+      } else {
+        localStorage.removeItem('spotify_access_token');
+      }
       localStorage.setItem('spotify_token_expiration', expirationTime.toString());
-      
+
       return true;
     } catch (error) {
       console.error('Error refreshing token:', error);
@@ -686,16 +648,24 @@ export class SpotifyService {
             
             if (!playResponse.ok) {
               const errorText = await playResponse.text();
-              console.error(`Error playing liked songs: Status ${playResponse.status}`, errorText);
-              throw new Error(`Failed to play liked songs: ${playResponse.status} ${errorText}`);
+              const sanitizedError = errorText.substring(0, 200); // Limit length
+              console.error('Error playing liked songs:', {
+                status: playResponse.status,
+                error: sanitizedError
+              });
+              throw new Error(`Failed to play liked songs: HTTP ${playResponse.status}`);
             }
           } else {
             console.log('No liked songs found');
           }
         } else {
           const errorText = await tracksResponse.text();
-          console.error(`Error fetching liked songs: Status ${tracksResponse.status}`, errorText);
-          throw new Error(`Failed to fetch liked songs: ${tracksResponse.status} ${errorText}`);
+          const sanitizedError = errorText.substring(0, 200); // Limit length
+          console.error('Error fetching liked songs:', {
+            status: tracksResponse.status,
+            error: sanitizedError
+          });
+          throw new Error(`Failed to fetch liked songs: HTTP ${tracksResponse.status}`);
         }
         return;
       }
@@ -715,8 +685,12 @@ export class SpotifyService {
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Error playing playlist: Status ${response.status}`, errorText);
-        throw new Error(`Failed to play playlist: ${response.status} ${errorText}`);
+        const sanitizedError = errorText.substring(0, 200); // Limit length
+        console.error('Error playing playlist:', {
+          status: response.status,
+          error: sanitizedError
+        });
+        throw new Error(`Failed to play playlist: HTTP ${response.status}`);
       }
     } catch (error) {
       console.error('Error playing playlist:', error);
@@ -771,38 +745,6 @@ export class SpotifyService {
     }
   }
 
-  // Add a dedicated method to clear Spotify cookies
-  private clearSpotifyCookies() {
-    // Try to clear all cookies from spotify.com domain
-    const cookies = document.cookie.split(';');
-    
-    // Clear cookies by setting their expiration to a past date
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i];
-      const eqPos = cookie.indexOf('=');
-      const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
-      
-      // Try to identify Spotify-related cookies and clear them
-      if (name.toLowerCase().includes('spotify') || 
-          name.toLowerCase().includes('sp_') || 
-          name.toLowerCase().includes('_sp')) {
-        console.log(`Clearing Spotify cookie: ${name}`);
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.spotify.com`;
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=accounts.spotify.com`;
-      }
-    }
-    
-    // Also clear all localStorage data related to Spotify
-    Object.keys(localStorage).forEach(key => {
-      if (key.toLowerCase().includes('spotify')) {
-        console.log(`Clearing localStorage item: ${key}`);
-        localStorage.removeItem(key);
-      }
-    });
-    
-    // Set a flag to indicate we've cleared cookies
-    localStorage.setItem('spotify_cookies_cleared', 'true');
-  }
 
   // Add the logout method to the SpotifyService class
   logout(): void {

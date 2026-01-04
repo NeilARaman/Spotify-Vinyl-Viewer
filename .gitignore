@@ -30,3 +30,6 @@ dist-ssr
 
 # Keep examples and defaults
 !.env.example
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

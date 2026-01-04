@@ -3,6 +3,11 @@ declare namespace Spotify {
     name: string;
     getOAuthToken: (cb: (token: string) => void) => void;
     volume?: number;
+    enableMediaSession?: boolean;
+    audioQuality?: {
+      robustness?: string;
+      preferredAudioCodecs?: string[];
+    };
   }
 
   interface PlaybackState {
@@ -41,10 +46,16 @@ declare namespace Spotify {
     device_id: string;
   }
 
+  interface NotReadyEvent {
+    device_id: string;
+  }
+
   class Player {
     constructor(config: PlayerInit);
     connect(): Promise<boolean>;
+    disconnect(): void;
     addListener(event: 'ready', callback: (event: ReadyEvent) => void): void;
+    addListener(event: 'not_ready', callback: (event: NotReadyEvent) => void): void;
     addListener(event: 'player_state_changed', callback: (state: PlaybackState | null) => void): void;
     addListener(event: 'initialization_error' | 'authentication_error' | 'account_error', callback: (event: ErrorEvent) => void): void;
     removeListener(event: string, callback?: Function): void;
