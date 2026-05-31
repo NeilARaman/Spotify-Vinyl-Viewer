@@ -4,7 +4,7 @@ import { SpotifyPlayer } from "../components/SpotifyPlayer";
 
 const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTrack, setCurrentTrack] = useState<{ name: string; artist: string } | undefined>();
+  const [currentTrack, setCurrentTrack] = useState<{ name: string; artist: string } | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-wood-dark/90 to-wood-dark flex items-center justify-center p-6">

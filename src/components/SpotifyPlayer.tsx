@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { spotifyService } from '../integrations/spotify';
+import { spotifyService, type SpotifyPlaylist } from '../integrations/spotify';
 import { Loader2 } from 'lucide-react';
 
 interface SpotifyPlayerProps {
@@ -19,7 +19,7 @@ type PlayerStatus =
 export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyPlayerProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<PlayerStatus>('initializing');
-  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [playlists, setPlaylists] = useState<SpotifyPlaylist[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [currentPlaylist, setCurrentPlaylist] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -110,7 +110,7 @@ export function SpotifyPlayer({ onPlaybackStateChange, onTrackChange }: SpotifyP
     };
 
     // Special handling for Brave browser
-    const isBrave = (navigator as any).brave !== undefined || 
+    const isBrave = (navigator as Navigator & { brave?: unknown }).brave !== undefined || 
                    (navigator.userAgent && navigator.userAgent.includes('Brave'));
     
     if (isBrave) {

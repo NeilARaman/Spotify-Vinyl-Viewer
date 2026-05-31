@@ -13,7 +13,7 @@ declare namespace Spotify {
   interface PlaybackState {
     context: {
       uri: string;
-      metadata: any;
+      metadata: unknown;
     };
     disallows: {
       pausing: boolean;
@@ -58,7 +58,7 @@ declare namespace Spotify {
     addListener(event: 'not_ready', callback: (event: NotReadyEvent) => void): void;
     addListener(event: 'player_state_changed', callback: (state: PlaybackState | null) => void): void;
     addListener(event: 'initialization_error' | 'authentication_error' | 'account_error', callback: (event: ErrorEvent) => void): void;
-    removeListener(event: string, callback?: Function): void;
+    removeListener(event: string, callback?: (...args: unknown[]) => void): void;
     getCurrentState(): Promise<PlaybackState | null>;
     setVolume(volume: number): Promise<void>;
     pause(): Promise<void>;

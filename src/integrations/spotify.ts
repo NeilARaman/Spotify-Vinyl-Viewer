@@ -1,5 +1,16 @@
 // Spotify SDK type definitions are in src/types/spotify.d.ts
 
+/** Minimal shape of a Spotify playlist as consumed by the UI. */
+export interface SpotifyPlaylist {
+  id: string;
+  name: string;
+  description?: string;
+  images?: Array<{ url: string }>;
+  tracks?: { total: number };
+  type?: string;
+  uri?: string;
+}
+
 // Load from environment variables
 const SPOTIFY_CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || `${window.location.origin}/callback`;
@@ -179,7 +190,7 @@ export class SpotifyService {
     localStorage.setItem('spotify_auth_state', state);
     
     // Base authorization URL - Using Authorization Code with PKCE flow instead of Implicit Grant
-    let authUrl = new URL('https://accounts.spotify.com/authorize');
+    const authUrl = new URL('https://accounts.spotify.com/authorize');
     const params = new URLSearchParams({
       client_id: clientId,
       response_type: 'code', // Changed from 'token' to 'code'
@@ -528,7 +539,7 @@ export class SpotifyService {
     return this.initializationPromise;
   }
 
-  async getUserSavedTracks(): Promise<any> {
+  async getUserSavedTracks(): Promise<SpotifyPlaylist | null> {
     if (!this.accessToken || !this.isLoggedIn()) {
       console.error('Not logged in to Spotify');
       return null;
@@ -570,7 +581,7 @@ export class SpotifyService {
     }
   }
 
-  async getUserPlaylists(): Promise<any[]> {
+  async getUserPlaylists(): Promise<SpotifyPlaylist[]> {
     if (!this.accessToken || !this.isLoggedIn()) {
       console.error('Not logged in to Spotify');
       return [];
@@ -632,7 +643,7 @@ export class SpotifyService {
           const tracksData = await tracksResponse.json();
           if (tracksData.items && tracksData.items.length > 0) {
             // Extract track URIs
-            const trackUris = tracksData.items.map((item: any) => item.track.uri);
+            const trackUris = tracksData.items.map((item: { track: { uri: string } }) => item.track.uri);
             
             // Play these specific tracks
             const playResponse = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
